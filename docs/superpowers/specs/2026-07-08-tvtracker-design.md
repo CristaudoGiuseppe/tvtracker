@@ -1,7 +1,7 @@
 # TVTracker — Personal TV Time Clone — Design Spec
 
 **Date:** 2026-07-08
-**Status:** Awaiting user review
+**Status:** Approved by user 2026-07-08. Priority directive: the UI must be user-first and as beautiful as possible — visual quality is a first-class requirement, not a polish afterthought.
 **Context:** TV Time shuts down permanently on 2026-07-15. This app replaces it as a single-user, self-hosted tracker running on the user's Mac, importing the user's TV Time GDPR export.
 
 ## Goals
