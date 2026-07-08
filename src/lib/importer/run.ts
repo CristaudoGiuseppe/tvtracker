@@ -7,7 +7,9 @@ import type { MatchedExport } from './match';
 
 export type ImportPreview = {
   shows: number;
-  episodes: number;
+  /** Episode watches belonging to a matched show; actual (season,episode)->tmdb
+   * resolution happens only during runImport, so this is not a guaranteed import count. */
+  episodesOfMatchedShows: number;
   movies: number;
   watchlist: number;
   follows: number;
@@ -65,7 +67,7 @@ export function dryRun(parsed: ParsedExport, matched: MatchedExport): ImportPrev
 
   return {
     shows: matched.shows.filter(s => s.tmdbId !== null).length,
-    episodes: parsed.episodeWatches.filter(e => showMap.has(e.tvdbSeriesId)).length,
+    episodesOfMatchedShows: parsed.episodeWatches.filter(e => showMap.has(e.tvdbSeriesId)).length,
     movies: watchedTmdb.size,
     watchlist: watchlistTmdb.size,
     follows: parsed.showFollows.filter(f => showMap.has(f.tvdbSeriesId)).length,

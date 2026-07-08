@@ -36,6 +36,11 @@ function movieOverrideKey(name: string, year: number | null): string {
   return `import.override.movie.${name.toLowerCase()}|${year ?? ''}`;
 }
 
+/** Persists a manual movie override consulted first by matchExport. */
+export function resolveManualMovieMatch(movieName: string, releaseYear: number | null, tmdbId: number): void {
+  setSetting(movieOverrideKey(movieName, releaseYear), String(tmdbId));
+}
+
 export async function matchExport(parsed: ParsedExport): Promise<MatchedExport> {
   const shows: MatchedShow[] = [];
   const movies: MatchedMovie[] = [];

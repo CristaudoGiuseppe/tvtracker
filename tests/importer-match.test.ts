@@ -11,7 +11,7 @@ vi.mock('../src/lib/tmdb', async () => {
 });
 
 import { findByTvdbId, searchMovies, TmdbError, type TmdbSearchResult } from '../src/lib/tmdb';
-import { matchExport, resolveManualMatch } from '../src/lib/importer/match';
+import { matchExport, resolveManualMatch, resolveManualMovieMatch } from '../src/lib/importer/match';
 import type { ParsedExport } from '../src/lib/importer/parse';
 
 function emptyParsed(): ParsedExport {
@@ -116,10 +116,7 @@ describe('matchExport', () => {
 
     it('a movie override wins over searchMovies', async () => {
       vi.mocked(searchMovies).mockResolvedValue([movieResult(1, 'Inception')]);
-      // override key uses lowercased name + |year
-      const { getDb } = await import('../src/db');
-      const { settings } = await import('../src/db/schema');
-      getDb().insert(settings).values({ key: 'import.override.movie.inception|2010', value: '27205' }).run();
+      resolveManualMovieMatch('Inception', 2010, 27205);
 
       const parsed = emptyParsed();
       parsed.movieWatches.push({ movieName: 'Inception', releaseYear: 2010, runtimeMin: 148, watchedAt: 'x', rewatchCount: 0 });

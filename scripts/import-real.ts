@@ -60,7 +60,7 @@ async function main(): Promise<void> {
 
   console.log('\n=== dryRun preview ===');
   console.log(`  shows     : ${preview.shows}`);
-  console.log(`  episodes  : ${preview.episodes}`);
+  console.log(`  episodes  : ${preview.episodesOfMatchedShows}`);
   console.log(`  follows   : ${preview.follows}`);
   console.log(`  movies    : ${preview.movies}`);
   console.log(`  watchlist : ${preview.watchlist}`);

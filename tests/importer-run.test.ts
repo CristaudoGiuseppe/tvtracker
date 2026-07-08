@@ -95,7 +95,7 @@ describe('dryRun', () => {
     const { parsed, matched } = scenario();
     const preview = dryRun(parsed, matched);
     expect(preview.shows).toBe(2);
-    expect(preview.episodes).toBe(4); // all 4 belong to a matched show (mismatch discovered only at run)
+    expect(preview.episodesOfMatchedShows).toBe(4); // all 4 belong to a matched show; (season,episode)->tmdb resolution happens only during runImport
     expect(preview.movies).toBe(1);
     expect(preview.watchlist).toBe(1);
     expect(preview.follows).toBe(2);

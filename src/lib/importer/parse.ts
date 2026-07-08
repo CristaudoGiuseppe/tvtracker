@@ -152,7 +152,13 @@ function parseV2(rows: Row[], out: ParsedExport): void {
   }
 }
 
+function movieDedupeKey(movieName: string, releaseYear: number | null): string {
+  return `${movieName.toLowerCase()}|${releaseYear ?? ''}`;
+}
+
 function parseLegacyMovies(rows: Row[], out: ParsedExport): void {
+  const followCandidates: MovieWatchlistEntry[] = [];
+
   for (const row of rows) {
     if ((row.entity_type ?? '').trim() !== 'movie') continue;
     const type = (row.type ?? '').trim();
@@ -178,8 +184,30 @@ function parseLegacyMovies(rows: Row[], out: ParsedExport): void {
         releaseYear,
         addedAt: ((row.created_at ?? '').trim() || (row.updated_at ?? '').trim()),
       });
+    } else if (type === 'follow') {
+      // Usually a redundant library-membership marker, but it's sometimes the
+      // only name-bearing record for a movie (e.g. its watch row lost its
+      // movie_name). Recover it as a watchlist candidate; real watch/towatch
+      // rows always take precedence (deduped below).
+      followCandidates.push({
+        movieName,
+        releaseYear,
+        addedAt: ((row.created_at ?? '').trim() || (row.updated_at ?? '').trim()),
+      });
     }
-    // type === 'follow' and other types: redundant library-membership markers; ignore.
+  }
+
+  if (followCandidates.length > 0) {
+    const known = new Set<string>();
+    for (const m of out.movieWatches) known.add(movieDedupeKey(m.movieName, m.releaseYear));
+    for (const m of out.movieWatchlist) known.add(movieDedupeKey(m.movieName, m.releaseYear));
+
+    for (const candidate of followCandidates) {
+      const key = movieDedupeKey(candidate.movieName, candidate.releaseYear);
+      if (known.has(key)) continue;
+      known.add(key);
+      out.movieWatchlist.push(candidate);
+    }
   }
 }
 

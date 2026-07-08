@@ -5,6 +5,7 @@ import { parseExport } from '../src/lib/importer/parse';
 const FIX = join(__dirname, 'fixtures', 'tvtime');
 const TINY = join(__dirname, 'fixtures', 'tvtime-tiny');
 const TINY_ZIP = join(__dirname, 'fixtures', 'tvtime-tiny.zip');
+const ANTMAN = join(__dirname, 'fixtures', 'tvtime-antman');
 
 describe('parseExport', () => {
   describe('main fixture (real representative rows)', () => {
@@ -97,6 +98,26 @@ describe('parseExport', () => {
       const parsed = parseExport(TINY_ZIP);
       expect(parsed.showFollows).toHaveLength(2);
       expect(parsed.showFollows.map(f => f.tvdbSeriesId).sort()).toEqual([355567, 365026]);
+    });
+  });
+
+  describe('follow-only movie (Ant-Man case: nameless watch row + named follow row)', () => {
+    const parsed = parseExport(ANTMAN);
+
+    it('recovers the movie as a single watchlist entry from the follow row', () => {
+      expect(parsed.movieWatchlist).toHaveLength(1);
+      const antMan = parsed.movieWatchlist[0];
+      expect(antMan.movieName).toBe('Ant-Man');
+      expect(antMan.releaseYear).toBe(2015);
+      expect(antMan.addedAt).toBe('2015-07-20 10:00:01');
+    });
+
+    it('does not create a movie watch (the watch row had no name)', () => {
+      expect(parsed.movieWatches).toHaveLength(0);
+    });
+
+    it('still warns about the nameless watch row', () => {
+      expect(parsed.warnings.some(w => w.includes('skipped movie row with empty movie_name'))).toBe(true);
     });
   });
 });
