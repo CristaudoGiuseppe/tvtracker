@@ -207,6 +207,15 @@ export function setMovieState(tmdbId: number, state: 'watchlist' | 'watched'): v
   getDb().update(libraryMovies).set({ state }).where(eq(libraryMovies.movieId, tmdbId)).run();
 }
 
+export function removeMovie(tmdbId: number): void {
+  const db = getDb();
+  db.transaction((tx: Db) => {
+    tx.delete(watches).where(and(eq(watches.kind, 'movie'), eq(watches.movieId, tmdbId))).run();
+    tx.delete(ratings).where(and(eq(ratings.kind, 'movie'), eq(ratings.targetId, tmdbId))).run();
+    tx.delete(libraryMovies).where(eq(libraryMovies.movieId, tmdbId)).run();
+  });
+}
+
 export function checkInMovie(tmdbId: number, watchedAt?: string): void {
   checkInMovieCore(getDb(), tmdbId, watchedAt);
 }

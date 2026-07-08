@@ -1,4 +1,4 @@
-import { checkInEpisode, checkInMovie, uncheckEpisode } from '../../../lib/library';
+import { checkInEpisode, checkInMovie, uncheckEpisode, setMovieState } from '../../../lib/library';
 import { getShowProgressByEpisode } from '../../../lib/watch-next';
 
 export async function POST(request: Request): Promise<Response> {
@@ -14,6 +14,9 @@ export async function POST(request: Request): Promise<Response> {
     }
     if (hasMovie) {
       checkInMovie(movieId, watchedAt);
+      // A movie check-in means it's been watched: move it out of the watchlist.
+      // No-op when the movie isn't in the library.
+      setMovieState(movieId, 'watched');
       return Response.json({ ok: true }, { status: 201 });
     }
     checkInEpisode(episodeId, watchedAt);

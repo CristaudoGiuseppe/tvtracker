@@ -3,18 +3,28 @@
 // browser. Hits the real TMDB API using the token in .env.
 // Run with: npx tsx scripts/seed-dev.ts
 import { and, eq } from 'drizzle-orm';
-import { addShow, checkInEpisode } from '../src/lib/library';
+import { addShow, addMovie, checkInEpisode } from '../src/lib/library';
 import { getDb } from '../src/db';
-import { episodes } from '../src/db/schema';
+import { episodes, movies } from '../src/db/schema';
 
 process.loadEnvFile('.env');
 
 const BREAKING_BAD = 1396;
+const FOUNDATION = 93740; // "Returning Series" — gives the Upcoming screen a chance at real dates
+const FIGHT_CLUB = 550; // watched movie
+const THE_MATRIX = 603; // watchlist movie
 const CHECK_IN_COUNT = 4;
 
 async function main(): Promise<void> {
   console.log('Adding Breaking Bad (1396) as "watching"…');
   await addShow(BREAKING_BAD, 'watching');
+
+  console.log('Adding Foundation (93740) as "watching" (for Upcoming)…');
+  await addShow(FOUNDATION, 'watching');
+
+  console.log('Adding Fight Club (550) as watched, The Matrix (603) to watchlist…');
+  await addMovie(FIGHT_CLUB, 'watched');
+  await addMovie(THE_MATRIX, 'watchlist');
 
   const db = getDb();
   const season1 = db
@@ -31,10 +41,12 @@ async function main(): Promise<void> {
   }
 
   const next = season1[CHECK_IN_COUNT];
+  const fightClub = db.select().from(movies).where(eq(movies.tmdbId, FIGHT_CLUB)).get();
   console.log(
     `\nSeeded. ${toCheckIn.length} episodes watched; next up = ` +
       (next ? `S1E${next.episodeNumber} "${next.name}".` : '(none).'),
   );
+  console.log(`Fight Club runtime = ${fightClub?.runtime ?? '?'} min (for the stats hand-check).`);
 }
 
 main().catch((err) => {

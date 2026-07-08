@@ -28,6 +28,7 @@ vi.mock('../src/lib/library', async importOriginal => {
     rate: vi.fn(actual.rate),
     addMovie: vi.fn(actual.addMovie),
     setMovieState: vi.fn(actual.setMovieState),
+    removeMovie: vi.fn(actual.removeMovie),
   };
 });
 
@@ -53,6 +54,8 @@ import { refreshStaleShows } from '../src/lib/sync';
 import type { TmdbSearchResult, TmdbShowFull } from '../src/lib/tmdb';
 
 import { POST as postLibraryShow } from '../src/app/api/library/shows/route';
+import { POST as postLibraryMovie } from '../src/app/api/library/movies/route';
+import { DELETE as deleteLibraryMovie } from '../src/app/api/library/movies/[id]/route';
 import { PATCH as patchLibraryShow, DELETE as deleteLibraryShow } from '../src/app/api/library/shows/[id]/route';
 import { POST as postCheckin, DELETE as deleteCheckin } from '../src/app/api/checkin/route';
 import { POST as postSeasonWatched } from '../src/app/api/season-watched/route';
@@ -152,12 +155,67 @@ describe('DELETE /api/library/shows/[id]', () => {
   });
 });
 
+// --- library/movies ------------------------------------------------------
+
+describe('POST /api/library/movies', () => {
+  beforeEach(() => {
+    vi.mocked(library.addMovie).mockReset().mockResolvedValue(undefined);
+  });
+
+  it('delegates a watchlist add to addMovie and returns 201', async () => {
+    const res = await postLibraryMovie(jsonRequest('http://x/api/library/movies', 'POST', { tmdbId: 550, state: 'watchlist' }));
+    expect(res.status).toBe(201);
+    expect(library.addMovie).toHaveBeenCalledWith(550, 'watchlist');
+  });
+
+  it('delegates a watched add to addMovie', async () => {
+    const res = await postLibraryMovie(jsonRequest('http://x/api/library/movies', 'POST', { tmdbId: 550, state: 'watched' }));
+    expect(res.status).toBe(201);
+    expect(library.addMovie).toHaveBeenCalledWith(550, 'watched');
+  });
+
+  it('400s when tmdbId is missing', async () => {
+    const res = await postLibraryMovie(jsonRequest('http://x/api/library/movies', 'POST', { state: 'watchlist' }));
+    expect(res.status).toBe(400);
+    expect(library.addMovie).not.toHaveBeenCalled();
+  });
+
+  it('400s on an invalid state', async () => {
+    const res = await postLibraryMovie(jsonRequest('http://x/api/library/movies', 'POST', { tmdbId: 550, state: 'seen' }));
+    expect(res.status).toBe(400);
+    expect(library.addMovie).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/library/movies/[id]', () => {
+  beforeEach(() => {
+    vi.mocked(library.removeMovie).mockReset().mockReturnValue(undefined);
+  });
+
+  it('delegates to removeMovie', async () => {
+    const res = await deleteLibraryMovie(new Request('http://x/api/library/movies/550', { method: 'DELETE' }), {
+      params: Promise.resolve({ id: '550' }),
+    });
+    expect(res.status).toBe(200);
+    expect(library.removeMovie).toHaveBeenCalledWith(550);
+  });
+
+  it('400s on a non-numeric id', async () => {
+    const res = await deleteLibraryMovie(new Request('http://x/api/library/movies/abc', { method: 'DELETE' }), {
+      params: Promise.resolve({ id: 'abc' }),
+    });
+    expect(res.status).toBe(400);
+    expect(library.removeMovie).not.toHaveBeenCalled();
+  });
+});
+
 // --- checkin -------------------------------------------------------------
 
 describe('POST /api/checkin', () => {
   beforeEach(() => {
     vi.mocked(library.checkInEpisode).mockReset().mockReturnValue(undefined);
     vi.mocked(library.checkInMovie).mockReset().mockReturnValue(undefined);
+    vi.mocked(library.setMovieState).mockReset().mockReturnValue(undefined);
   });
 
   it('delegates an episode check-in', async () => {
@@ -166,10 +224,11 @@ describe('POST /api/checkin', () => {
     expect(library.checkInEpisode).toHaveBeenCalledWith(555, '2024-01-01 00:00:00');
   });
 
-  it('delegates a movie check-in to checkInMovie', async () => {
+  it('delegates a movie check-in to checkInMovie and moves it to watched', async () => {
     const res = await postCheckin(jsonRequest('http://x/api/checkin', 'POST', { movieId: 777 }));
     expect(res.status).toBe(201);
     expect(library.checkInMovie).toHaveBeenCalledWith(777, undefined);
+    expect(library.setMovieState).toHaveBeenCalledWith(777, 'watched');
   });
 
   it('400s when neither episodeId nor movieId is given', async () => {

@@ -5,6 +5,7 @@ import {
   daysUntil,
   countdownIt,
   formatRuntime,
+  formatDayHeaderIt,
 } from '../src/lib/format';
 
 const NOW = new Date('2026-07-08T12:00:00Z');
@@ -48,6 +49,16 @@ describe('daysUntil / countdownIt', () => {
     expect(countdownIt('2026-07-08', NOW)).toBe('oggi');
     expect(countdownIt('2026-07-09', NOW)).toBe('domani');
     expect(countdownIt('2026-07-11', NOW)).toBe('fra 3 giorni');
+  });
+});
+
+describe('formatDayHeaderIt', () => {
+  it('labels today and tomorrow', () => {
+    expect(formatDayHeaderIt('2026-07-08', NOW)).toBe('Oggi');
+    expect(formatDayHeaderIt('2026-07-09', NOW)).toBe('Domani');
+  });
+  it('formats a capitalized italian weekday + date otherwise', () => {
+    expect(formatDayHeaderIt('2026-07-11', NOW)).toBe('Sabato 11 luglio');
   });
 });
 

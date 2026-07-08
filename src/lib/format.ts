@@ -63,6 +63,22 @@ export function countdownIt(dateStr: string, now: Date = new Date()): string {
   return `fra ${days} giorni`;
 }
 
+const DAY_HEADER_FMT = new Intl.DateTimeFormat("it-IT", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+});
+
+/** Day header for the upcoming timeline: "Oggi" / "Domani" / "giovedì 9 luglio". */
+export function formatDayHeaderIt(dateStr: string, now: Date = new Date()): string {
+  const days = daysUntil(dateStr, now);
+  if (days === 0) return "Oggi";
+  if (days === 1) return "Domani";
+  const s = DAY_HEADER_FMT.format(parseUtc(dateStr));
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 /** "45 min" / "1 h 5 min"; empty string when unknown. */
 export function formatRuntime(minutes: number | null | undefined): string {
   if (!minutes || minutes <= 0) return "";
