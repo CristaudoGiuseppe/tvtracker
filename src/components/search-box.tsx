@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Poster, Skeleton, cn } from "./ui";
@@ -30,17 +30,20 @@ function AddButton({
   id,
   kind,
   inLibrary,
+  onAdded,
 }: {
   id: number;
   kind: "tv" | "movie";
   inLibrary: boolean;
+  onAdded?: () => void;
 }) {
   const router = useRouter();
-  const [added, setAdded] = useState(inLibrary);
+  const [added, setAdded] = useState(false);
   const [pending, setPending] = useState(false);
+  const inLib = added || inLibrary;
 
   async function add() {
-    if (pending || added) return;
+    if (pending || inLib) return;
     setPending(true);
     try {
       const [url, body] =
@@ -54,6 +57,7 @@ function AddButton({
       });
       if (!res.ok) throw new Error(String(res.status));
       setAdded(true);
+      onAdded?.();
       router.refresh();
     } catch {
       toast(kind === "tv" ? "Impossibile aggiungere la serie." : "Impossibile aggiungere il film.");
@@ -62,7 +66,7 @@ function AddButton({
     }
   }
 
-  if (added) {
+  if (inLib) {
     return (
       <span className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-xs font-medium text-finished">
         <CheckIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
@@ -95,10 +99,12 @@ export function ExploreCard({
   result,
   inLibrary,
   className,
+  onAdded,
 }: {
   result: ExploreResult;
   inLibrary: boolean;
   className?: string;
+  onAdded?: () => void;
 }) {
   const href = result.kind === "tv" ? `/show/${result.id}` : `/movie/${result.id}`;
   const year = yearOf(result);
@@ -126,7 +132,7 @@ export function ExploreCard({
         {year && <p className="mt-0.5 text-xs text-faint tabular-nums">{year}</p>}
       </div>
       <div className="mt-0.5">
-        <AddButton id={result.id} kind={result.kind} inLibrary={inLibrary} />
+        <AddButton id={result.id} kind={result.kind} inLibrary={inLibrary} onAdded={onAdded} />
       </div>
     </div>
   );
@@ -150,8 +156,11 @@ export function SearchBox({
   const [loading, setLoading] = useState(false);
   const reqId = useRef(0);
 
-  const showSet = useRef(new Set(libraryShowIds));
-  const movieSet = useRef(new Set(libraryMovieIds));
+  // Derived from props on each render so router.refresh() delivers fresh library state;
+  // justAdded keeps optimistic additions visible until the refresh lands.
+  const showSet = useMemo(() => new Set(libraryShowIds), [libraryShowIds]);
+  const movieSet = useMemo(() => new Set(libraryMovieIds), [libraryMovieIds]);
+  const [justAdded, setJustAdded] = useState<Set<string>>(new Set());
 
   const trimmed = query.trim();
 
@@ -182,7 +191,12 @@ export function SearchBox({
   }, [trimmed]);
 
   function inLibrary(r: ExploreResult): boolean {
-    return r.kind === "tv" ? showSet.current.has(r.id) : movieSet.current.has(r.id);
+    if (justAdded.has(`${r.kind}-${r.id}`)) return true;
+    return r.kind === "tv" ? showSet.has(r.id) : movieSet.has(r.id);
+  }
+
+  function markAdded(r: ExploreResult): void {
+    setJustAdded((prev) => new Set(prev).add(`${r.kind}-${r.id}`));
   }
 
   const searching = trimmed !== "";
@@ -219,7 +233,7 @@ export function SearchBox({
           ) : results && results.length > 0 ? (
             <div className={cn(GRID, loading && "opacity-60 transition-opacity")}>
               {results.map((r) => (
-                <ExploreCard key={`${r.kind}-${r.id}`} result={r} inLibrary={inLibrary(r)} />
+                <ExploreCard key={`${r.kind}-${r.id}`} result={r} inLibrary={inLibrary(r)} onAdded={() => markAdded(r)} />
               ))}
             </div>
           ) : (

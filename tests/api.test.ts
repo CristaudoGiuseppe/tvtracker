@@ -160,18 +160,21 @@ describe('DELETE /api/library/shows/[id]', () => {
 describe('POST /api/library/movies', () => {
   beforeEach(() => {
     vi.mocked(library.addMovie).mockReset().mockResolvedValue(undefined);
+    vi.mocked(library.setMovieState).mockReset().mockReturnValue(undefined);
   });
 
-  it('delegates a watchlist add to addMovie and returns 201', async () => {
+  it('delegates a watchlist add to addMovie and returns 201, without upgrading state', async () => {
     const res = await postLibraryMovie(jsonRequest('http://x/api/library/movies', 'POST', { tmdbId: 550, state: 'watchlist' }));
     expect(res.status).toBe(201);
     expect(library.addMovie).toHaveBeenCalledWith(550, 'watchlist');
+    expect(library.setMovieState).not.toHaveBeenCalled();
   });
 
-  it('delegates a watched add to addMovie', async () => {
+  it('delegates a watched add to addMovie and also upgrades existing library rows via setMovieState', async () => {
     const res = await postLibraryMovie(jsonRequest('http://x/api/library/movies', 'POST', { tmdbId: 550, state: 'watched' }));
     expect(res.status).toBe(201);
     expect(library.addMovie).toHaveBeenCalledWith(550, 'watched');
+    expect(library.setMovieState).toHaveBeenCalledWith(550, 'watched');
   });
 
   it('400s when tmdbId is missing', async () => {

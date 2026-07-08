@@ -1,4 +1,4 @@
-import { addMovie } from '../../../../lib/library';
+import { addMovie, setMovieState } from '../../../../lib/library';
 import { TmdbError } from '../../../../lib/tmdb';
 
 export async function POST(request: Request): Promise<Response> {
@@ -13,6 +13,9 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ error: "state must be 'watchlist' or 'watched'" }, { status: 400 });
     }
     await addMovie(tmdbId, state);
+    // addMovie is onConflictDoNothing: if the movie is already in the library (e.g. in the
+    // watchlist), upgrade it to watched explicitly so this request isn't a silent no-op.
+    if (state === 'watched') setMovieState(tmdbId, 'watched');
     return Response.json({ ok: true }, { status: 201 });
   } catch (err) {
     if (err instanceof TmdbError) return Response.json({ error: err.message }, { status: 502 });
