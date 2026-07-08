@@ -3,7 +3,7 @@ import { readFileSync, existsSync, rmSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resetDbForTests, getDb } from '../src/db';
-import { libraryShows } from '../src/db/schema';
+import { libraryShows, settings as settingsTable, shows } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 // --- mocks -------------------------------------------------------------
@@ -62,7 +62,10 @@ import { POST as postSeasonWatched } from '../src/app/api/season-watched/route';
 import { POST as postRate } from '../src/app/api/rate/route';
 import { GET as getSearch } from '../src/app/api/search/route';
 import { POST as postImport, PUT as putImport } from '../src/app/api/import/route';
+import { POST as postImportMatch } from '../src/app/api/import/match/route';
 import { POST as postSync } from '../src/app/api/sync/route';
+import { GET as getSettings, POST as postSettings } from '../src/app/api/settings/route';
+import { GET as getExport } from '../src/app/api/export/route';
 
 let realLibrary: typeof import('../src/lib/library');
 
@@ -454,5 +457,93 @@ describe('POST/PUT /api/import', () => {
   it('PUT 400s on a mismatched sessionId', async () => {
     const res = await putImport(jsonRequest('http://x/api/import', 'PUT', { sessionId: 'nope', confirm: true }));
     expect(res.status).toBe(400);
+  });
+});
+
+// --- settings (real db) ----------------------------------------------------
+
+describe('GET/POST /api/settings', () => {
+  beforeEach(() => {
+    resetDbForTests();
+  });
+
+  it('GET defaults to it-IT when unset', async () => {
+    const res = await getSettings();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ language: 'it-IT' });
+  });
+
+  it('POST persists a valid language and GET reflects it', async () => {
+    const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { language: 'en-US' }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ language: 'en-US' });
+
+    const row = getDb().select().from(settingsTable).where(eq(settingsTable.key, 'tmdb.language')).get();
+    expect(row?.value).toBe('en-US');
+    expect(await (await getSettings()).json()).toEqual({ language: 'en-US' });
+  });
+
+  it('400s on an invalid language', async () => {
+    const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { language: 'fr-FR' }));
+    expect(res.status).toBe(400);
+  });
+});
+
+// --- import/match (real db) ------------------------------------------------
+
+describe('POST /api/import/match', () => {
+  beforeEach(() => {
+    resetDbForTests();
+  });
+
+  it('persists a show override', async () => {
+    const res = await postImportMatch(jsonRequest('http://x/api/import/match', 'POST', { kind: 'show', tvdbSeriesId: 355567, tmdbId: 71912 }));
+    expect(res.status).toBe(200);
+    const row = getDb().select().from(settingsTable).where(eq(settingsTable.key, 'import.override.tvdb.355567')).get();
+    expect(row?.value).toBe('71912');
+  });
+
+  it('persists a movie override keyed by name|year', async () => {
+    const res = await postImportMatch(jsonRequest('http://x/api/import/match', 'POST', { kind: 'movie', movieName: 'Dune', releaseYear: 2021, tmdbId: 438631 }));
+    expect(res.status).toBe(200);
+    const row = getDb().select().from(settingsTable).where(eq(settingsTable.key, 'import.override.movie.dune|2021')).get();
+    expect(row?.value).toBe('438631');
+  });
+
+  it('400s when tmdbId is missing', async () => {
+    const res = await postImportMatch(jsonRequest('http://x/api/import/match', 'POST', { kind: 'show', tvdbSeriesId: 1 }));
+    expect(res.status).toBe(400);
+  });
+
+  it('400s when a show match lacks tvdbSeriesId', async () => {
+    const res = await postImportMatch(jsonRequest('http://x/api/import/match', 'POST', { kind: 'show', tmdbId: 1 }));
+    expect(res.status).toBe(400);
+  });
+
+  it('400s on an unknown kind', async () => {
+    const res = await postImportMatch(jsonRequest('http://x/api/import/match', 'POST', { kind: 'person', tmdbId: 1 }));
+    expect(res.status).toBe(400);
+  });
+});
+
+// --- export (real db) ------------------------------------------------------
+
+describe('GET /api/export', () => {
+  beforeEach(() => {
+    resetDbForTests();
+  });
+
+  it('returns a JSON attachment dumping user tables + a show id/name map', async () => {
+    const db = getDb();
+    db.insert(shows).values({ tmdbId: 71912, name: 'The Boys' }).run();
+    db.insert(libraryShows).values({ showId: 71912, status: 'watching', addedAt: '2024-01-01 00:00:00' }).run();
+
+    const res = await getExport();
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toContain('tvtracker-export.json');
+    const data = await res.json();
+    expect(data.shows).toContainEqual({ tmdbId: 71912, name: 'The Boys' });
+    expect(data.libraryShows).toHaveLength(1);
+    expect(Array.isArray(data.watches)).toBe(true);
   });
 });

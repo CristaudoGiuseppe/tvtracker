@@ -15,6 +15,11 @@ export type ImportPreview = {
   follows: number;
   unmatchedShows: string[];
   unmatchedMovies: string[];
+  /** Structured unmatched entries carrying the identifiers the manual-match UI
+   * needs (tvdbSeriesId for shows, name+year for movies). The plain string
+   * arrays above are kept for existing callers/tests. */
+  unmatchedShowItems: { tvdbSeriesId: number; seriesName: string }[];
+  unmatchedMovieItems: { movieName: string; releaseYear: number | null }[];
 };
 
 export type EpisodeMismatch = { show: string; season: number; episode: number; count: number };
@@ -73,6 +78,12 @@ export function dryRun(parsed: ParsedExport, matched: MatchedExport): ImportPrev
     follows: parsed.showFollows.filter(f => showMap.has(f.tvdbSeriesId)).length,
     unmatchedShows: matched.unmatchedShows,
     unmatchedMovies: matched.unmatchedMovies,
+    unmatchedShowItems: matched.shows
+      .filter(s => s.tmdbId === null)
+      .map(s => ({ tvdbSeriesId: s.tvdbSeriesId, seriesName: s.seriesName })),
+    unmatchedMovieItems: matched.movies
+      .filter(m => m.tmdbId === null)
+      .map(m => ({ movieName: m.movieName, releaseYear: m.releaseYear })),
   };
 }
 

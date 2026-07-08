@@ -1,3 +1,5 @@
+import { getLanguage } from './settings';
+
 const BASE_URL = 'https://api.themoviedb.org/3';
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_RETRIES = 3;
@@ -86,7 +88,9 @@ function getToken(): string {
 
 function buildUrl(path: string, params: Record<string, string> = {}): string {
   const url = new URL(BASE_URL + path);
-  url.searchParams.set('language', 'it-IT');
+  // Default metadata language comes from the user setting (it-IT fallback).
+  // Callers can still override per-request via `params.language`.
+  url.searchParams.set('language', getLanguage());
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
