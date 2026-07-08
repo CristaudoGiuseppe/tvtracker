@@ -1,26 +1,128 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ------------------------------------------------------------------ *
+ * TVTracker design tokens — dark cinematic canvas, single amber accent.
+ * Tailwind v4: @theme values generate utilities (bg-*, text-*, ring-*,
+ * rounded-*, shadow-*, ease-*, animate-*).
+ * ------------------------------------------------------------------ */
+@theme {
+  /* Surfaces — neutrals tinted toward the blue-black canvas hue */
+  --color-canvas: #0b0e14;
+  --color-surface: #141926;
+  --color-surface-2: #1b2233;
+  --color-line: #262d40;
+  --color-line-strong: #333c54;
+
+  /* Ink — never pure white; tinted cool */
+  --color-ink: #eef1f8;
+  --color-muted: #949cb2;
+  --color-faint: #616a80;
+
+  /* Accent — one warm amber, used sparingly for actions & check-ins */
+  --color-accent: #f5a623;
+  --color-accent-hi: #ffbe4d;
+  --color-accent-press: #d98c12;
+  --color-accent-ink: #1a1204; /* readable dark text on amber fill */
+
+  /* Library-status hues — desaturated, distinct, never neon */
+  --color-watching: #f5a623; /* In visione  */
+  --color-caughtup: #34c4a8; /* In pari     */
+  --color-towatch: #7089c9; /* Da vedere   */
+  --color-finished: #63c284; /* Finite      */
+  --color-dropped: #d47b7b; /* Abbandonate */
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
+
+  --radius-xl: 0.85rem;
+  --radius-2xl: 1.15rem;
+
+  --shadow-card: 0 1px 2px rgba(3, 5, 10, 0.5),
+    0 12px 32px -16px rgba(0, 0, 0, 0.7);
+  --shadow-pop: 0 16px 48px -12px rgba(0, 0, 0, 0.8);
+
+  /* Motion — exponential ease-out for natural deceleration */
+  --ease-quint: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+  --animate-check-pop: check-pop 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-fade-up: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes shimmer {
+  0% {
+    background-position: -150% 0;
+  }
+  100% {
+    background-position: 150% 0;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes check-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    /* faint warm key-light from the top edge — cinematic, not a glow */
+    background-image: radial-gradient(
+      120% 60% at 50% -20%,
+      color-mix(in oklab, var(--color-accent) 6%, transparent),
+      transparent 55%
+    );
+    background-attachment: fixed;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 30%, transparent);
+    color: var(--color-ink);
+  }
+
+  /* Themed scrollbars keep the dark canvas coherent */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
