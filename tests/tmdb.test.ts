@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import {
   tmdbGet,
   findByTvdbId,
@@ -9,6 +9,7 @@ import {
   trendingShows,
   trendingMovies,
   TmdbError,
+  resetTmdbForTests,
 } from '../src/lib/tmdb';
 
 process.env.TMDB_READ_TOKEN = 'test-token';
@@ -24,6 +25,10 @@ function mockResponse(body: unknown, status = 200): Response {
 }
 
 describe('tmdb client', () => {
+  beforeEach(() => {
+    resetTmdbForTests();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -254,5 +259,34 @@ describe('tmdb client', () => {
     const urls = fetchMock.mock.calls.map((c: unknown[]) => String(c[0]));
     expect(urls[0]).toContain('/trending/tv/week');
     expect(urls[1]).toContain('/trending/movie/week');
+  });
+
+  it('(g) throttles the 41st request until the 10s sliding window elapses', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse({ ok: true }, 200));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const requests = Array.from({ length: 40 }, (_, i) =>
+      tmdbGet(`/movie/${910000 + i}`),
+    );
+    await Promise.all(requests);
+    expect(fetchMock).toHaveBeenCalledTimes(40);
+
+    let resolved41 = false;
+    const p41 = tmdbGet('/movie/929999').then(() => {
+      resolved41 = true;
+    });
+
+    // Flush microtasks without advancing time: request #41 must still be waiting.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(resolved41).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(40);
+
+    // Cross the 10s window boundary: request #41 should now go through.
+    await vi.advanceTimersByTimeAsync(10_000);
+    await p41;
+
+    expect(resolved41).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(41);
   });
 });

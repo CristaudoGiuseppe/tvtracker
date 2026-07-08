@@ -71,6 +71,13 @@ export interface TmdbSearchResult {
 const cache = new Map<string, { expiresAt: number; data: unknown }>();
 const requestTimestamps: number[] = [];
 
+// Test-only: clears module state (throttle timestamps + URL cache) so tests don't
+// leak state into one another.
+export function resetTmdbForTests(): void {
+  requestTimestamps.length = 0;
+  cache.clear();
+}
+
 function getToken(): string {
   const token = process.env.TMDB_READ_TOKEN;
   if (!token) throw new TmdbError('TMDB_READ_TOKEN is not set');
