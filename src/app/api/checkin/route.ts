@@ -1,4 +1,5 @@
 import { checkInEpisode, checkInMovie, uncheckEpisode } from '../../../lib/library';
+import { getShowProgressByEpisode } from '../../../lib/watch-next';
 
 export async function POST(request: Request): Promise<Response> {
   try {
@@ -11,9 +12,23 @@ export async function POST(request: Request): Promise<Response> {
     if (hasEpisode === hasMovie) {
       return Response.json({ error: 'exactly one of episodeId or movieId is required' }, { status: 400 });
     }
-    if (hasEpisode) checkInEpisode(episodeId, watchedAt);
-    else checkInMovie(movieId, watchedAt);
-    return Response.json({ ok: true }, { status: 201 });
+    if (hasMovie) {
+      checkInMovie(movieId, watchedAt);
+      return Response.json({ ok: true }, { status: 201 });
+    }
+    checkInEpisode(episodeId, watchedAt);
+    // Return the refreshed next episode so a Watch Next card can advance in place.
+    const progress = getShowProgressByEpisode(episodeId);
+    const next = progress?.nextEpisode
+      ? {
+          tmdbId: progress.nextEpisode.tmdbId,
+          seasonNumber: progress.nextEpisode.seasonNumber,
+          episodeNumber: progress.nextEpisode.episodeNumber,
+          name: progress.nextEpisode.name,
+          stillPath: progress.nextEpisode.stillPath,
+        }
+      : null;
+    return Response.json({ ok: true, next }, { status: 201 });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

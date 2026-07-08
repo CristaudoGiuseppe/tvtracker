@@ -96,3 +96,28 @@ export const SearchIcon = (p: IconProps) => (
     <path d="m20 20-3.5-3.5" />
   </Svg>
 );
+
+// Favorite + rating. Pass fill="currentColor" for the filled (active) state.
+export const StarIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.79L12 16.77 6.8 19.5l.99-5.79-4.21-4.1 5.82-.85L12 3.5Z" />
+  </Svg>
+);
+
+export const PlusIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Svg>
+);
+
+export const ChevronDownIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m6 9.5 6 6 6-6" />
+  </Svg>
+);
+
+export const ArrowLeftIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M19 12H5M11 6l-6 6 6 6" />
+  </Svg>
+);

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/nav";
+import { Toaster } from "@/components/toast";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -23,6 +24,7 @@ export default function RootLayout({
     <html lang="it" className={inter.variable}>
       <body className="antialiased">
         <Nav />
+        <Toaster />
         {/* Offset for the fixed sidebar on desktop; clear the bottom bar on mobile */}
         <div className="flex min-h-screen flex-col md:pl-[248px]">
           <main className="flex-1 px-5 pb-28 pt-6 sm:px-8 md:px-10 md:pb-10 md:pt-10">

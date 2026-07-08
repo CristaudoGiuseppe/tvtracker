@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
 import { getDb } from '../db';
-import { shows, episodes, libraryShows, watches } from '../db/schema';
+import { shows, seasons, episodes, libraryShows, watches, ratings } from '../db/schema';
 
 export type ShowRow = typeof shows.$inferSelect;
 export type EpisodeRow = typeof episodes.$inferSelect;
@@ -51,6 +51,96 @@ export function getShowProgress(showId: number): ShowProgress {
   const db = getDb();
   const eps = db.select().from(episodes).where(eq(episodes.showId, showId)).all();
   return computeProgress(eps, watchedEpisodeIdsForShow(showId), today());
+}
+
+export interface DetailEpisode {
+  tmdbId: number;
+  seasonNumber: number;
+  episodeNumber: number;
+  name: string | null;
+  stillPath: string | null;
+  airDate: string | null;
+  runtime: number | null;
+  watched: boolean;
+  watchCount: number;
+}
+
+export interface DetailSeason {
+  seasonNumber: number;
+  name: string | null;
+  episodes: DetailEpisode[];
+}
+
+export interface ShowDetail {
+  show: ShowRow;
+  lib: LibraryShowRow;
+  progress: ShowProgress;
+  seasons: DetailSeason[];
+  rating: number | null;
+}
+
+/** Specials (season 0) sort after regular seasons; regular seasons ascending. */
+function seasonSort(a: number, b: number): number {
+  if (a === 0) return 1;
+  if (b === 0) return -1;
+  return a - b;
+}
+
+/** Full detail view-model for an in-library show: seasons → episodes with per-episode watch state, progress and rating. Returns null if the show is not in the library. */
+export function getShowDetail(showId: number): ShowDetail | null {
+  const db = getDb();
+  const lib = db.select().from(libraryShows).where(eq(libraryShows.showId, showId)).get();
+  if (!lib) return null;
+  const show = db.select().from(shows).where(eq(shows.tmdbId, showId)).get();
+  if (!show) return null;
+
+  const eps = db.select().from(episodes).where(eq(episodes.showId, showId)).all();
+  const seasonRows = db.select().from(seasons).where(eq(seasons.showId, showId)).all();
+  const watchRows = db.select().from(watches).where(and(eq(watches.kind, 'episode'), eq(watches.showId, showId))).all();
+
+  const watchCounts = new Map<number, number>();
+  for (const w of watchRows) {
+    if (w.episodeId !== null) watchCounts.set(w.episodeId, (watchCounts.get(w.episodeId) ?? 0) + 1);
+  }
+  const progress = computeProgress(eps, new Set(watchCounts.keys()), today());
+
+  const seasonNames = new Map(seasonRows.map(s => [s.seasonNumber, s.name]));
+  const bySeason = new Map<number, DetailEpisode[]>();
+  for (const e of eps) {
+    const list = bySeason.get(e.seasonNumber) ?? [];
+    list.push({
+      tmdbId: e.tmdbId,
+      seasonNumber: e.seasonNumber,
+      episodeNumber: e.episodeNumber,
+      name: e.name,
+      stillPath: e.stillPath,
+      airDate: e.airDate,
+      runtime: e.runtime,
+      watched: watchCounts.has(e.tmdbId),
+      watchCount: watchCounts.get(e.tmdbId) ?? 0,
+    });
+    bySeason.set(e.seasonNumber, list);
+  }
+
+  const detailSeasons: DetailSeason[] = [...bySeason.keys()]
+    .sort(seasonSort)
+    .map(seasonNumber => ({
+      seasonNumber,
+      name: seasonNames.get(seasonNumber) ?? null,
+      episodes: bySeason.get(seasonNumber)!.sort((a, b) => a.episodeNumber - b.episodeNumber),
+    }));
+
+  const ratingRow = db.select().from(ratings).where(and(eq(ratings.kind, 'show'), eq(ratings.targetId, showId))).get();
+
+  return { show, lib, progress, seasons: detailSeasons, rating: ratingRow?.rating ?? null };
+}
+
+/** Refreshed progress for the show that owns `episodeTmdbId` — used by the check-in route to advance a card in place. */
+export function getShowProgressByEpisode(episodeTmdbId: number): ShowProgress | null {
+  const db = getDb();
+  const ep = db.select().from(episodes).where(eq(episodes.tmdbId, episodeTmdbId)).get();
+  if (!ep) return null;
+  return getShowProgress(ep.showId);
 }
 
 /** 'watching', non-archived shows that have a next episode; ordered by last-watch recency desc, never-watched last. */
