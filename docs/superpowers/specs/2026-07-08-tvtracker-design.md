@@ -61,8 +61,12 @@ Derived (computed, not stored): per-show progress, "up to date" detection, watch
 
 Settings → Import: upload the GDPR export ZIP.
 
-- **Parsing:** `tracking-prod-records-v2.csv` is the primary source (verified against the user's real export on 2026-07-08). Columns include `s_id` (TVDB series id), `series_name`, `movie_name`, `season_number`, `episode_number`, `created_at`, `is_followed`, `is_for_later`, `is_archived`. Rows with empty season/episode = show-level follow; rows with numbers = episode watch events. `followed_tv_show.csv` supplements follow state. Ratings CSV imported if present in the account's export.
-- **Matching:** TVDB id → TMDB via `/find/{tvdb_id}?external_source=tvdb_id` (exact). Movies (name-only in export) matched by TMDB search + release-year heuristic.
+- **Parsing** (verified against the user's real export, 13,999 episode watches / 342 shows / 327 movie rows, on 2026-07-08):
+  - `tracking-prod-records-v2.csv` — primary episode source. `s_id` (TVDB series id), `ep_id` (TVDB episode id), `series_name`, `season_number`, `episode_number`, `created_at` (watch timestamp). Keys prefixed `rewatch-episode-…` mark rewatches. Rows with empty episode fields = show-level follow state (`is_followed`, `is_for_later`, `is_archived`).
+  - `tracking-prod-records.csv` (legacy) — **movie source**: `type=watch|follow|towatch` rows with `entity_type=movie`, `movie_name`, `release_date`, `runtime`, `watch_date`, `rewatch_count`. `towatch` = watchlist.
+  - `followed_tv_show.csv` — supplements follow state and archived flag.
+  - `ratings-3-prod-episode_votes.csv` / `ratings-v2-prod-votes.csv` — episode and movie votes; the vote value is encoded in `vote_key` and must be decoded during implementation (TV Time used emotion-style votes, not plain 1–10; import as best-effort and skip cleanly if undecodable).
+- **Matching:** TVDB id → TMDB via `/find/{tvdb_id}?external_source=tvdb_id` (exact). Movies matched by TMDB search on `movie_name` + `release_date` year from the legacy file.
 - **Flow:** parse → resolve → **dry-run preview** (n shows, n episodes, n unmatched) → user confirms → import. Original `created_at` timestamps preserved as `watched_at`.
 - **Unmatched handling:** listed in a report with a manual search-and-match UI; never silently dropped.
 - **Idempotent:** re-running the same ZIP creates no duplicates (natural keys: tvdb id + season + episode + timestamp).
