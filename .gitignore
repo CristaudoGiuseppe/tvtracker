@@ -41,5 +41,5 @@ next-env.d.ts
 
 # project-specific
 data/
-import/
+/import/
 .superpowers/
