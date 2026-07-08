@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { getDb } from '../../db';
 import { episodes, watches } from '../../db/schema';
-import { addShow, addMovie, type LibStatus } from '../library';
+import { addShow, addMovie, setMovieState, type LibStatus } from '../library';
 import type { ParsedExport, ShowFollow } from './parse';
 import type { MatchedExport } from './match';
 
@@ -189,6 +189,7 @@ export async function runImport(
   for (const [tmdbId, { earliest, rewatchCount }] of watchedByTmdb) {
     try {
       await addMovie(tmdbId, 'watched', earliest);
+      setMovieState(tmdbId, 'watched');
       const desired = 1 + (rewatchCount > 0 ? rewatchCount : 0);
       let existing = db.select().from(watches).where(and(eq(watches.kind, 'movie'), eq(watches.movieId, tmdbId))).all().length;
       for (; existing < desired; existing++) {

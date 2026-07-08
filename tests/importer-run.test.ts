@@ -195,6 +195,26 @@ describe('runImport', () => {
     expect(rows.every(r => r.watchedAt === '2022-01-01 00:00:00')).toBe(true);
   });
 
+  it('upgrades a watchlist movie to watched when a later run also matches it as watched (manual-match-then-rerun)', async () => {
+    const { parsed, matched } = scenario();
+    await runImport(parsed, matched); // run 1: Movie Y only in the watchlist
+    const db = getDb();
+    expect(db.select().from(libraryMovies).where(eq(libraryMovies.movieId, 7002)).get()?.state).toBe('watchlist');
+
+    // run 2: user fixed Movie Y's match via resolveManualMovieMatch, now it also shows up as watched
+    const parsed2: ParsedExport = {
+      ...parsed,
+      movieWatches: [
+        ...parsed.movieWatches,
+        { movieName: 'Movie Y', releaseYear: 2021, runtimeMin: 110, watchedAt: '2024-01-01 00:00:00', rewatchCount: 0 },
+      ],
+    };
+    await runImport(parsed2, matched);
+
+    expect(db.select().from(libraryMovies).where(eq(libraryMovies.movieId, 7002)).get()?.state).toBe('watched');
+    expect(db.select().from(watches).where(eq(watches.movieId, 7002)).all()).toHaveLength(1);
+  });
+
   it('collects an error and continues when a show import throws', async () => {
     const { parsed, matched } = scenario();
     vi.mocked(getShowFull).mockImplementation(async (id: number) => {
