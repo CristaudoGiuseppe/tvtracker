@@ -109,11 +109,12 @@ export function Poster({
   priority = false,
 }: PosterProps) {
   const [loaded, setLoaded] = useState(false);
+  const [errored, setErrored] = useState(false);
 
   const shell =
     "group relative aspect-[2/3] overflow-hidden rounded-xl bg-surface-2 ring-1 ring-line/70";
 
-  if (!path) {
+  if (!path || errored) {
     return (
       <div className={cn(shell, "grid place-items-center", className)}>
         <span className="select-none text-2xl font-semibold tracking-wide text-faint">
@@ -143,6 +144,7 @@ export function Poster({
         loading={priority ? "eager" : "lazy"}
         decoding="async"
         onLoad={() => setLoaded(true)}
+        onError={() => setErrored(true)}
         className={cn(
           "relative h-full w-full object-cover transition-opacity duration-700 ease-quint",
           loaded ? "opacity-100" : "opacity-0",
