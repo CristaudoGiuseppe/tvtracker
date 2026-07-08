@@ -378,6 +378,10 @@ describe('POST/PUT /api/import', () => {
 
     const row = getDb().select().from(libraryShows).where(eq(libraryShows.showId, 71912)).get();
     expect(row?.status).toBe('watching');
+
+    // Verify session files are invalidated after successful import
+    const res2 = await putImport(jsonRequest('http://x/api/import', 'PUT', { sessionId: 'import-session', confirm: true }));
+    expect(res2.status).toBe(400);
   });
 
   it('PUT 400s when no session has been created', async () => {

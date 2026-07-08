@@ -1,4 +1,4 @@
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseExport, type ParsedExport } from '../../../lib/importer/parse';
 import { matchExport, type MatchedExport } from '../../../lib/importer/match';
@@ -59,6 +59,12 @@ export async function PUT(request: Request): Promise<Response> {
     const { parsed, matched }: StoredSession = JSON.parse(raw);
 
     const report = await runImport(parsed, matched);
+
+    // Clean up session files after successful import
+    const dir = dataDir();
+    await rm(join(dir, `${SESSION_ID}.json`), { force: true });
+    await rm(join(dir, `${SESSION_ID}.zip`), { force: true });
+
     return Response.json(report, { status: 200 });
   } catch (err) {
     if (err instanceof TmdbError) return Response.json({ error: err.message }, { status: 502 });
