@@ -1,6 +1,6 @@
 import { eq, and } from 'drizzle-orm';
 import { getDb } from '../../db';
-import { episodes, watches } from '../../db/schema';
+import { episodes, watches, libraryShows } from '../../db/schema';
 import { addShow, addMovie, setMovieState, type LibStatus } from '../library';
 import { findEpisodeByTvdbId, TmdbError } from '../tmdb';
 import type { ParsedExport, ShowFollow } from './parse';
@@ -170,7 +170,11 @@ async function importShowEpisodes(
       }
       if (found) {
         const epRow = db.select().from(episodes).where(eq(episodes.tmdbId, found.episodeTmdbId)).get();
-        if (epRow) {
+        // Cached episodes/shows rows outlive removeShow (which only clears
+        // watches/ratings/library rows), so also require the episode's show
+        // to still be in the library before inserting a watch for it.
+        const inLibrary = epRow && db.select().from(libraryShows).where(eq(libraryShows.showId, epRow.showId)).get();
+        if (epRow && inLibrary) {
           const inserted = insertEpisodeWatch(db, epRow.tmdbId, epRow.showId, w.watchedAt, nextIndex, report);
           if (inserted) report.recoveredByEpisodeId++;
           continue;

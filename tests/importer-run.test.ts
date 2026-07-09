@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getDb, resetDbForTests } from '../src/db';
-import { watches, libraryShows, libraryMovies } from '../src/db/schema';
+import { watches, libraryShows, libraryMovies, shows, episodes } from '../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { TmdbShowFull, TmdbMovie } from '../src/lib/tmdb';
 
@@ -332,6 +332,30 @@ describe('runImport: ep_id recovery of mismatched episodes', () => {
     expect(db.select().from(watches).all().length).toBe(before);
     expect(second.recoveredByEpisodeId).toBe(0);
     expect(second.skippedDuplicates).toBe(1);
+  });
+
+  it('does not insert a watch when the resolved episode belongs to a show no longer in the library (orphaned cache row)', async () => {
+    const { parsed, matched } = recoveryScenario(55505);
+
+    // Simulate a show that was previously imported and later removed via
+    // removeShow: its cached shows/episodes rows survive, but library_shows
+    // does not. findEpisodeByTvdbId resolves to this orphaned episode.
+    const db = getDb();
+    db.insert(shows).values({ tmdbId: 9999, name: 'Orphaned Show', status: 'Ended' }).run();
+    db.insert(episodes).values({
+      tmdbId: 30001, showId: 9999, seasonNumber: 1, episodeNumber: 1, name: 'Orphan E1',
+    }).run();
+
+    vi.mocked(findEpisodeByTvdbId).mockResolvedValue({
+      episodeTmdbId: 30001, showTmdbId: 9999, seasonNumber: 1, episodeNumber: 1,
+    });
+
+    const report = await runImport(parsed, matched);
+
+    expect(report.recoveredByEpisodeId).toBe(0);
+    expect(report.imported.episodes).toBe(0);
+    expect(report.episodeMismatches).toEqual([{ show: 'Show A', season: 9, episode: 9, count: 1 }]);
+    expect(db.select().from(watches).where(eq(watches.episodeId, 30001)).all()).toHaveLength(0);
   });
 
   it('assigns increasing rewatchIndex to duplicate ep_id rewatch rows', async () => {
