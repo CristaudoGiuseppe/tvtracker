@@ -195,6 +195,7 @@ export function ProgressBar({
 
 const STATUS = {
   watching: { label: "In visione", color: "var(--color-watching)" },
+  to_start: { label: "Da iniziare", color: "var(--color-tostart)" },
   caught_up: { label: "In pari", color: "var(--color-caughtup)" },
   to_watch: { label: "Da vedere", color: "var(--color-towatch)" },
   finished: { label: "Finite", color: "var(--color-finished)" },

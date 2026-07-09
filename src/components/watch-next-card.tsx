@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckinButton, cn } from "./ui";
+import { CheckinButton, ProgressBar, cn } from "./ui";
 import { toast } from "./toast";
 import { relativeTimeIt } from "@/lib/format";
 
@@ -16,6 +16,8 @@ export type WatchNextEpisode = {
   name: string | null;
 };
 
+export type WatchNextProgress = { airedCount: number; watchedCount: number };
+
 export type WatchNextItem = {
   showId: number;
   showName: string;
@@ -23,11 +25,17 @@ export type WatchNextItem = {
   posterPath: string | null;
   next: WatchNextEpisode;
   lastWatchedAt: string | null;
+  progress: WatchNextProgress;
 };
 
 function episodeLabel(ep: WatchNextEpisode): string {
   const code = `S${ep.seasonNumber} · E${ep.episodeNumber}`;
   return ep.name ? `${code} — ${ep.name}` : code;
+}
+
+function remainingLabel(p: WatchNextProgress): string {
+  const remaining = Math.max(0, p.airedCount - p.watchedCount);
+  return remaining === 1 ? "Ti manca 1 episodio" : `Ti mancano ${remaining} episodi`;
 }
 
 /** Fires the self-throttled sync once when the Watch Next screen mounts. */
@@ -41,6 +49,7 @@ export function SyncOnMount() {
 export function WatchNextCard({ item }: { item: WatchNextItem }) {
   const router = useRouter();
   const [next, setNext] = useState<WatchNextEpisode>(item.next);
+  const [progress, setProgress] = useState<WatchNextProgress>(item.progress);
   const [checked, setChecked] = useState(false);
   const [pending, setPending] = useState(false);
   const [justWatched, setJustWatched] = useState(false);
@@ -55,8 +64,14 @@ export function WatchNextCard({ item }: { item: WatchNextItem }) {
   async function handleCheckin() {
     if (pending) return;
     const episodeId = next.tmdbId;
+    const prevProgress = progress;
     setPending(true);
     setChecked(true);
+    // Optimistic: advance the bar immediately; reconcile with the server below.
+    setProgress((p) => ({
+      ...p,
+      watchedCount: Math.min(p.watchedCount + 1, p.airedCount),
+    }));
     try {
       const res = await fetch("/api/checkin", {
         method: "POST",
@@ -64,7 +79,11 @@ export function WatchNextCard({ item }: { item: WatchNextItem }) {
         body: JSON.stringify({ episodeId }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      const data = (await res.json()) as { next: WatchNextEpisode | null };
+      const data = (await res.json()) as {
+        next: WatchNextEpisode | null;
+        progress: WatchNextProgress | null;
+      };
+      if (data.progress) setProgress(data.progress);
       if (data.next) {
         // Advance in place: swap the episode line, reset the button.
         setNext(data.next);
@@ -77,6 +96,7 @@ export function WatchNextCard({ item }: { item: WatchNextItem }) {
       router.refresh();
     } catch {
       setChecked(false);
+      setProgress(prevProgress);
       toast("Check-in non riuscito. Riprova.");
     } finally {
       setPending(false);
@@ -124,6 +144,15 @@ export function WatchNextCard({ item }: { item: WatchNextItem }) {
             >
               {episodeLabel(next)}
             </p>
+            {progress.airedCount > 0 && (
+              <div className="mt-3">
+                <ProgressBar
+                  value={progress.watchedCount}
+                  max={progress.airedCount}
+                  label={remainingLabel(progress)}
+                />
+              </div>
+            )}
           </div>
         </div>
       </Link>

@@ -26,6 +26,7 @@
 
   /* Library-status hues — desaturated, distinct, never neon */
   --color-watching: #f5a623; /* In visione  */
+  --color-tostart: #bf8fd6; /* Da iniziare */
   --color-caughtup: #34c4a8; /* In pari     */
   --color-towatch: #7089c9; /* Da vedere   */
   --color-finished: #63c284; /* Finite      */

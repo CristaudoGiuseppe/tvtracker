@@ -20,7 +20,7 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ ok: true }, { status: 201 });
     }
     checkInEpisode(episodeId, watchedAt);
-    // Return the refreshed next episode so a Watch Next card can advance in place.
+    // Return the refreshed next episode + progress so a Watch Next card can advance in place.
     const progress = getShowProgressByEpisode(episodeId);
     const next = progress?.nextEpisode
       ? {
@@ -31,7 +31,10 @@ export async function POST(request: Request): Promise<Response> {
           stillPath: progress.nextEpisode.stillPath,
         }
       : null;
-    return Response.json({ ok: true, next }, { status: 201 });
+    const progressOut = progress
+      ? { airedCount: progress.airedCount, watchedCount: progress.watchedCount }
+      : null;
+    return Response.json({ ok: true, next, progress: progressOut }, { status: 201 });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }

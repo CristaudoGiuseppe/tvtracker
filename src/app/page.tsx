@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default function WatchNextPage() {
   const list = getWatchNextList();
-  const items: WatchNextItem[] = list.map(({ show, next, lastWatchedAt }) => ({
+  const items: WatchNextItem[] = list.map(({ show, next, lastWatchedAt, progress }) => ({
     showId: show.tmdbId,
     showName: show.name,
     backdropPath: show.backdropPath,
@@ -24,6 +24,7 @@ export default function WatchNextPage() {
       name: next.name,
     },
     lastWatchedAt,
+    progress,
   }));
 
   return (

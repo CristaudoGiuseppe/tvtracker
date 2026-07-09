@@ -6,7 +6,7 @@ export type ShowRow = typeof shows.$inferSelect;
 export type EpisodeRow = typeof episodes.$inferSelect;
 export type LibraryShowRow = typeof libraryShows.$inferSelect;
 
-type LibraryGroup = 'watching' | 'up_to_date' | 'for_later' | 'finished' | 'stopped';
+type LibraryGroup = 'watching' | 'to_start' | 'up_to_date' | 'for_later' | 'finished' | 'stopped';
 
 export interface ShowProgress {
   airedCount: number;
@@ -143,13 +143,21 @@ export function getShowProgressByEpisode(episodeTmdbId: number): ShowProgress | 
   return getShowProgress(ep.showId);
 }
 
+export interface WatchNextItem {
+  show: ShowRow;
+  lib: LibraryShowRow;
+  next: EpisodeRow;
+  lastWatchedAt: string | null;
+  progress: { airedCount: number; watchedCount: number };
+}
+
 /** 'watching', non-archived shows that have a next episode; ordered by last-watch recency desc, never-watched last. */
-export function getWatchNextList(): { show: ShowRow; lib: LibraryShowRow; next: EpisodeRow; lastWatchedAt: string | null }[] {
+export function getWatchNextList(): WatchNextItem[] {
   const db = getDb();
   const todayStr = today();
   const libs = db.select().from(libraryShows).where(and(eq(libraryShows.status, 'watching'), eq(libraryShows.archived, 0))).all();
 
-  const results: { show: ShowRow; lib: LibraryShowRow; next: EpisodeRow; lastWatchedAt: string | null }[] = [];
+  const results: WatchNextItem[] = [];
   for (const lib of libs) {
     const show = db.select().from(shows).where(eq(shows.tmdbId, lib.showId)).get();
     if (!show) continue;
@@ -161,7 +169,13 @@ export function getWatchNextList(): { show: ShowRow; lib: LibraryShowRow; next: 
     const lastWatchedAt = watchRows.length
       ? watchRows.reduce((max, w) => (w.watchedAt > max ? w.watchedAt : max), watchRows[0].watchedAt)
       : null;
-    results.push({ show, lib, next: progress.nextEpisode, lastWatchedAt });
+    results.push({
+      show,
+      lib,
+      next: progress.nextEpisode,
+      lastWatchedAt,
+      progress: { airedCount: progress.airedCount, watchedCount: progress.watchedCount },
+    });
   }
 
   results.sort((a, b) => {
@@ -200,14 +214,16 @@ export function getUpcoming(daysAhead = 90): { show: ShowRow; episode: EpisodeRo
 }
 
 /**
- * Display grouping for the whole library: stored 'watching' splits into 'watching' vs 'up_to_date' via progress;
- * other stored statuses map to their own group. Archived shows still appear here (archived only suppresses
+ * Display grouping for the whole library: stored 'watching' splits three ways via progress —
+ * 'up_to_date' (all aired episodes watched), 'to_start' (never watched an episode), else 'watching' (in progress).
+ * Other stored statuses map to their own group. Archived shows still appear here (archived only suppresses
  * watch-next/upcoming noise, it does not remove a show from its library group).
  */
 export function getLibraryGrouped(): Record<LibraryGroup, { show: ShowRow; lib: LibraryShowRow; progress: ShowProgress }[]> {
   const db = getDb();
   const grouped: Record<LibraryGroup, { show: ShowRow; lib: LibraryShowRow; progress: ShowProgress }[]> = {
     watching: [],
+    to_start: [],
     up_to_date: [],
     for_later: [],
     finished: [],
@@ -219,7 +235,12 @@ export function getLibraryGrouped(): Record<LibraryGroup, { show: ShowRow; lib: 
     const show = db.select().from(shows).where(eq(shows.tmdbId, lib.showId)).get();
     if (!show) continue;
     const progress = getShowProgress(lib.showId);
-    const group: LibraryGroup = lib.status === 'watching' ? (progress.upToDate ? 'up_to_date' : 'watching') : (lib.status as LibraryGroup);
+    let group: LibraryGroup;
+    if (lib.status === 'watching') {
+      group = progress.upToDate ? 'up_to_date' : progress.watchedCount === 0 ? 'to_start' : 'watching';
+    } else {
+      group = lib.status as LibraryGroup;
+    }
     grouped[group].push({ show, lib, progress });
   }
   return grouped;

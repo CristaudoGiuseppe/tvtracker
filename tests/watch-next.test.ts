@@ -135,6 +135,29 @@ describe('watch-next', () => {
       expect(list[0].lastWatchedAt).toBe('2024-06-01 00:00:00');
       expect(list[2].lastWatchedAt).toBeNull();
     });
+
+    it('exposes computed progress (aired/watched) per item', () => {
+      insertShow(16, 'Progress Show');
+      insertLib(16, 'watching');
+      insertEpisode(1600, 16, 1, 1, YESTERDAY); // aired, watched
+      insertEpisode(1601, 16, 1, 2, YESTERDAY); // aired, unwatched -> next
+      insertEpisode(1602, 16, 1, 3, TOMORROW); // unaired, not counted
+      insertWatch(1600, 16, '2024-06-01 00:00:00');
+
+      const list = getWatchNextList();
+      const item = list.find(r => r.show.tmdbId === 16)!;
+      expect(item.progress).toEqual({ airedCount: 2, watchedCount: 1 });
+    });
+
+    it('exposes zero-watched progress for a never-started show', () => {
+      insertShow(17, 'Never Started Show');
+      insertLib(17, 'watching');
+      insertEpisode(1700, 17, 1, 1, YESTERDAY);
+
+      const list = getWatchNextList();
+      const item = list.find(r => r.show.tmdbId === 17)!;
+      expect(item.progress).toEqual({ airedCount: 1, watchedCount: 0 });
+    });
   });
 
   describe('getUpcoming', () => {
@@ -203,21 +226,40 @@ describe('watch-next', () => {
   });
 
   describe('getLibraryGrouped', () => {
-    it('splits stored "watching" into "watching" vs "up_to_date" based on progress', () => {
+    it('splits stored "watching" into "watching" / "to_start" / "up_to_date" based on progress', () => {
+      // watchedCount >= 1 but behind -> watching
       insertShow(40, 'Still Watching Show');
       insertLib(40, 'watching');
       insertEpisode(4000, 40, 1, 1, YESTERDAY);
       insertEpisode(4001, 40, 1, 2, YESTERDAY);
       insertWatch(4000, 40, '2024-01-01 00:00:00');
 
+      // all aired episodes watched -> up_to_date
       insertShow(41, 'Caught Up Show');
       insertLib(41, 'watching');
       insertEpisode(4100, 41, 1, 1, YESTERDAY);
       insertWatch(4100, 41, '2024-01-01 00:00:00');
 
+      // watching, never watched an episode -> to_start
+      insertShow(46, 'Never Started Show');
+      insertLib(46, 'watching');
+      insertEpisode(4600, 46, 1, 1, YESTERDAY);
+
       const grouped = getLibraryGrouped();
       expect(grouped.watching.map(r => r.show.tmdbId)).toEqual([40]);
+      expect(grouped.to_start.map(r => r.show.tmdbId)).toEqual([46]);
       expect(grouped.up_to_date.map(r => r.show.tmdbId)).toEqual([41]);
+    });
+
+    it('classifies a watching show with no aired episodes yet as to_start', () => {
+      insertShow(47, 'Not Aired Yet Show');
+      insertLib(47, 'watching');
+      insertEpisode(4700, 47, 1, 1, TOMORROW); // unaired -> airedCount 0, watchedCount 0
+
+      const grouped = getLibraryGrouped();
+      expect(grouped.to_start.map(r => r.show.tmdbId)).toEqual([47]);
+      expect(grouped.watching.map(r => r.show.tmdbId)).toEqual([]);
+      expect(grouped.up_to_date.map(r => r.show.tmdbId)).toEqual([]);
     });
 
     it('maps stored for_later/finished/stopped to their own groups', () => {

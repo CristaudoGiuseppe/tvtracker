@@ -8,8 +8,9 @@ export const dynamic = "force-dynamic";
 
 const GROUPS: { key: keyof ReturnType<typeof getLibraryGrouped>; label: string }[] = [
   { key: "watching", label: "In visione" },
+  { key: "to_start", label: "Da iniziare" },
   { key: "up_to_date", label: "In pari" },
-  { key: "for_later", label: "Da vedere" },
+  { key: "for_later", label: "Da vedere più tardi" },
   { key: "finished", label: "Finite" },
   { key: "stopped", label: "Abbandonate" },
 ];
