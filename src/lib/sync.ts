@@ -1,4 +1,4 @@
-import { eq, and, or, isNull, lt, notInArray } from 'drizzle-orm';
+import { asc, eq, and, or, isNull, lt, notInArray } from 'drizzle-orm';
 import { getDb } from '../db';
 import { shows, movies, libraryShows, libraryMovies, settings } from '../db/schema';
 import { getShowFull } from './tmdb';
@@ -8,6 +8,12 @@ const STALE_MS = 24 * 60 * 60 * 1000;
 const GUARD_MS = 60 * 60 * 1000;
 const LAST_RUN_KEY = 'sync.lastRunAt';
 const NON_STALE_STATUSES = ['Ended', 'Canceled'];
+// Max providers-backfill fetches per sync run. The backfill runs inside the
+// POST /api/sync request handler: unbounded it would walk every NULL-providers
+// library title (hundreds of throttled TMDB calls, minutes of wall time) in a
+// single request. Capped, each run chips away at the backlog lowest-id first;
+// with the 1-hour sync guard the whole library completes over a few app opens.
+export const PROVIDERS_BACKFILL_BATCH = 80;
 
 function toDate(utcString: string): Date {
   return new Date(utcString.replace(' ', 'T') + 'Z');
@@ -74,10 +80,12 @@ export async function refreshStaleShows(): Promise<number> {
   return refreshed;
 }
 
-/** Fills `watch_providers` for every library title where it's still NULL —
- * shows AND movies, including Ended/Canceled shows (the metadata staleness skip
- * does NOT apply to this providers backfill). Failure-tolerant per title. */
-async function backfillProviders(): Promise<void> {
+/** Fills `watch_providers` for library titles where it's still NULL — shows AND
+ * movies, including Ended/Canceled shows (the metadata staleness skip does NOT
+ * apply to this providers backfill). Processes at most
+ * PROVIDERS_BACKFILL_BATCH titles per run, lowest tmdbId first; returns how
+ * many NULL titles remain for later runs. Failure-tolerant per title. */
+async function backfillProviders(): Promise<number> {
   const db = getDb();
 
   const showIds = db
@@ -85,18 +93,23 @@ async function backfillProviders(): Promise<void> {
     .from(shows)
     .innerJoin(libraryShows, eq(libraryShows.showId, shows.tmdbId))
     .where(isNull(shows.watchProviders))
-    .all();
-  for (const { id } of showIds) {
-    await refreshProviders('tv', id);
-  }
+    .orderBy(asc(shows.tmdbId))
+    .all()
+    .map(r => ({ kind: 'tv' as const, id: r.id }));
 
   const movieIds = db
     .select({ id: movies.tmdbId })
     .from(movies)
     .innerJoin(libraryMovies, eq(libraryMovies.movieId, movies.tmdbId))
     .where(isNull(movies.watchProviders))
-    .all();
-  for (const { id } of movieIds) {
-    await refreshProviders('movie', id);
+    .orderBy(asc(movies.tmdbId))
+    .all()
+    .map(r => ({ kind: 'movie' as const, id: r.id }));
+
+  const pending = [...showIds, ...movieIds];
+  const batch = pending.slice(0, PROVIDERS_BACKFILL_BATCH);
+  for (const { kind, id } of batch) {
+    await refreshProviders(kind, id);
   }
+  return pending.length - batch.length;
 }

@@ -40,7 +40,10 @@ export function ProvidersRow({ json }: { json: string | null | undefined }) {
   const providers = parse(json);
   if (!providers) return null;
 
-  const { flatrate, rent, buy } = providers;
+  // Defensive defaults: a stored shape missing an array key must never crash a detail page.
+  const flatrate = providers.flatrate ?? [];
+  const rent = providers.rent ?? [];
+  const buy = providers.buy ?? [];
   const secondary = [...rent, ...buy];
   // Rent and buy frequently overlap; de-dupe by provider id for the subsection.
   const secondaryUnique = secondary.filter(

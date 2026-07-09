@@ -10,7 +10,7 @@ vi.mock('../src/lib/tmdb', () => ({
 }));
 
 import { getShowFull, getWatchProviders } from '../src/lib/tmdb';
-import { refreshStaleShows } from '../src/lib/sync';
+import { refreshStaleShows, PROVIDERS_BACKFILL_BATCH } from '../src/lib/sync';
 
 const providers = { region: 'IT', flatrate: [{ id: 8, name: 'Netflix', logoPath: '/n.jpg' }], rent: [], buy: [] };
 
@@ -161,5 +161,30 @@ describe('providers backfill', () => {
     await refreshStaleShows();
 
     expect(vi.mocked(getWatchProviders)).not.toHaveBeenCalled();
+  });
+
+  it('caps each run at PROVIDERS_BACKFILL_BATCH and finishes the backlog on the next run', async () => {
+    const extra = 3;
+    for (let i = 0; i < PROVIDERS_BACKFILL_BATCH + extra; i++) {
+      seedShow(1000 + i, 'Ended', iso(-48 * HOUR));
+    }
+
+    // First run: exactly the cap, lowest ids first.
+    await refreshStaleShows();
+    expect(vi.mocked(getWatchProviders)).toHaveBeenCalledTimes(PROVIDERS_BACKFILL_BATCH);
+    const stillNull = () => getDb().select().from(shows).all().filter(r => r.watchProviders === null);
+    expect(stillNull()).toHaveLength(extra);
+    expect(stillNull().map(r => r.tmdbId)).toEqual([
+      1000 + PROVIDERS_BACKFILL_BATCH,
+      1001 + PROVIDERS_BACKFILL_BATCH,
+      1002 + PROVIDERS_BACKFILL_BATCH,
+    ]);
+
+    // Second run (1-hour guard bypassed): the remainder is picked up.
+    getDb().update(settings).set({ value: iso(-2 * HOUR) }).where(eq(settings.key, 'sync.lastRunAt')).run();
+    vi.mocked(getWatchProviders).mockClear();
+    await refreshStaleShows();
+    expect(vi.mocked(getWatchProviders)).toHaveBeenCalledTimes(extra);
+    expect(stillNull()).toHaveLength(0);
   });
 });
