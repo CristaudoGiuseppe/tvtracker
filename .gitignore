@@ -43,3 +43,6 @@ next-env.d.ts
 data/
 /import/
 .superpowers/
+
+# local archives of the data volume (never commit data)
+data-backup-*/
