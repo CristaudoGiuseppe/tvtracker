@@ -1,3 +1,3 @@
 tv_show_name,user_id,tv_show_id,updated_at,diffusion,archived,created_at,active,notification_type,folder_id,notification_offset
-The Boys,55200263,355567,2021-12-04 13:04:23,original,0,2021-12-04 13:04:23,1,2,,1440
-Carnival Row,55200263,365026,2021-12-04 13:04:22,original,0,2021-12-04 13:04:22,1,2,,1440
+The Boys,10000001,355567,2021-12-04 13:04:23,original,0,2021-12-04 13:04:23,1,2,,1440
+Carnival Row,10000001,365026,2021-12-04 13:04:22,original,0,2021-12-04 13:04:22,1,2,,1440

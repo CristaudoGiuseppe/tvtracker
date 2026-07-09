@@ -71,7 +71,7 @@ Settings → Import: upload the GDPR export ZIP.
 - **Unmatched handling:** listed in a report with a manual search-and-match UI; never silently dropped.
 - **Idempotent:** re-running the same ZIP creates no duplicates (natural keys: tvdb id + season + episode + timestamp).
 
-The user's first export (account `hiimbepps@gmail.com`, 2 follows, 0 watches) is kept at `import/` as a test fixture. The real export from the user's main account is pending (deadline 2026-07-15).
+The user's first export (a nearly-empty secondary account, 2 follows, 0 watches) is kept at `import/` as a test fixture. The real export from the user's main account is pending (deadline 2026-07-15).
 
 ## Error handling
 
