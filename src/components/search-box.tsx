@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Poster, Skeleton, cn } from "./ui";
 import { SearchIcon, PlusIcon, CheckIcon } from "./icons";
 import { toast } from "./toast";
+import { AddShowIntent } from "./add-show-intent";
 
 export type ExploreResult = {
   id: number;
@@ -46,21 +47,17 @@ function AddButton({
     if (pending || inLib) return;
     setPending(true);
     try {
-      const [url, body] =
-        kind === "tv"
-          ? ["/api/library/shows", { tmdbId: id }]
-          : ["/api/library/movies", { tmdbId: id, state: "watchlist" }];
-      const res = await fetch(url, {
+      const res = await fetch("/api/library/movies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ tmdbId: id, state: "watchlist" }),
       });
       if (!res.ok) throw new Error(String(res.status));
       setAdded(true);
       onAdded?.();
       router.refresh();
     } catch {
-      toast(kind === "tv" ? "Impossibile aggiungere la serie." : "Impossibile aggiungere il film.");
+      toast("Impossibile aggiungere il film.");
     } finally {
       setPending(false);
     }
@@ -73,6 +70,11 @@ function AddButton({
         In libreria
       </span>
     );
+  }
+
+  // Shows get add-with-intent (start watching / save for later); movies go straight to the watchlist.
+  if (kind === "tv") {
+    return <AddShowIntent tmdbId={id} variant="card" onAdded={onAdded} />;
   }
 
   return (

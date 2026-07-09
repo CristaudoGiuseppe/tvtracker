@@ -1,6 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { getDb } from '../db';
 import { shows, seasons, episodes, libraryShows, watches, ratings } from '../db/schema';
+import type { ProviderEntry, ProvidersJson } from './tmdb';
 
 export type ShowRow = typeof shows.$inferSelect;
 export type EpisodeRow = typeof episodes.$inferSelect;
@@ -227,15 +228,56 @@ export function getUpcoming(daysAhead = 90): { show: ShowRow; episode: EpisodeRo
   return results;
 }
 
+/** Item shape for the My Shows grid: core row plus the client-side filter/sort facets. */
+export interface LibraryGroupItem {
+  show: ShowRow;
+  lib: LibraryShowRow;
+  progress: ShowProgress;
+  genres: string[];
+  providers: ProviderEntry[]; // flatrate (subscription) providers only
+  lastWatchedAt: string | null;
+}
+
+function parseGenres(json: string | null): string[] {
+  if (!json) return [];
+  try {
+    const arr = JSON.parse(json);
+    return Array.isArray(arr) ? arr.filter((g): g is string => typeof g === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseFlatrate(json: string | null): ProviderEntry[] {
+  if (!json) return [];
+  try {
+    const p = JSON.parse(json) as ProvidersJson;
+    return Array.isArray(p.flatrate) ? p.flatrate : [];
+  } catch {
+    return [];
+  }
+}
+
+function lastWatchedAtForShow(showId: number): string | null {
+  const rows = getDb()
+    .select({ watchedAt: watches.watchedAt })
+    .from(watches)
+    .where(and(eq(watches.kind, 'episode'), eq(watches.showId, showId)))
+    .all();
+  if (rows.length === 0) return null;
+  return rows.reduce((max, r) => (r.watchedAt > max ? r.watchedAt : max), rows[0].watchedAt);
+}
+
 /**
  * Display grouping for the whole library: stored 'watching' splits three ways via progress —
  * 'up_to_date' (all aired episodes watched), 'to_start' (never watched an episode), else 'watching' (in progress).
  * Other stored statuses map to their own group. Archived shows still appear here (archived only suppresses
  * watch-next/upcoming noise, it does not remove a show from its library group).
+ * Each item also carries genres, flatrate providers and last-watch timestamp for client-side filter/sort.
  */
-export function getLibraryGrouped(): Record<LibraryGroup, { show: ShowRow; lib: LibraryShowRow; progress: ShowProgress }[]> {
+export function getLibraryGrouped(): Record<LibraryGroup, LibraryGroupItem[]> {
   const db = getDb();
-  const grouped: Record<LibraryGroup, { show: ShowRow; lib: LibraryShowRow; progress: ShowProgress }[]> = {
+  const grouped: Record<LibraryGroup, LibraryGroupItem[]> = {
     watching: [],
     to_start: [],
     up_to_date: [],
@@ -249,7 +291,14 @@ export function getLibraryGrouped(): Record<LibraryGroup, { show: ShowRow; lib: 
     const show = db.select().from(shows).where(eq(shows.tmdbId, lib.showId)).get();
     if (!show) continue;
     const progress = getShowProgress(lib.showId);
-    grouped[libraryGroupFor(lib.status, progress)].push({ show, lib, progress });
+    grouped[libraryGroupFor(lib.status, progress)].push({
+      show,
+      lib,
+      progress,
+      genres: parseGenres(show.genres),
+      providers: parseFlatrate(show.watchProviders),
+      lastWatchedAt: lastWatchedAtForShow(lib.showId),
+    });
   }
   return grouped;
 }

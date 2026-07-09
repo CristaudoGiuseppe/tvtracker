@@ -34,9 +34,28 @@ export function getLanguage(): TmdbLanguage {
 }
 
 export function setLanguage(language: TmdbLanguage): void {
+  setSetting(LANGUAGE_KEY, language);
+}
+
+/** Raw value for a settings key, or null when unset (defensive: never throws). */
+export function getSetting(key: string): string | null {
+  try {
+    const row = getDb().select().from(settings).where(eq(settings.key, key)).get();
+    return row?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Upsert a settings key. Callers (thin API route) own validation. */
+export function setSetting(key: string, value: string): void {
   getDb()
     .insert(settings)
-    .values({ key: LANGUAGE_KEY, value: language })
-    .onConflictDoUpdate({ target: settings.key, set: { value: language } })
+    .values({ key, value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } })
     .run();
+}
+
+export function deleteSetting(key: string): void {
+  getDb().delete(settings).where(eq(settings.key, key)).run();
 }

@@ -487,6 +487,51 @@ describe('GET/POST /api/settings', () => {
     const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { language: 'fr-FR' }));
     expect(res.status).toBe(400);
   });
+
+  it('persists a whitelisted view.myshows JSON string and round-trips it', async () => {
+    const value = JSON.stringify({ sort: 'progress', genre: 'Dramma', favOnly: true });
+    const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { key: 'view.myshows', value }));
+    expect(res.status).toBe(200);
+    const row = getDb().select().from(settingsTable).where(eq(settingsTable.key, 'view.myshows')).get();
+    expect(row?.value).toBe(value);
+  });
+
+  it('persists a whitelisted watch.region', async () => {
+    const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { key: 'watch.region', value: 'US' }));
+    expect(res.status).toBe(200);
+    const row = getDb().select().from(settingsTable).where(eq(settingsTable.key, 'watch.region')).get();
+    expect(row?.value).toBe('US');
+  });
+
+  it('clears a whitelisted key when value is null (Reimposta)', async () => {
+    await postSettings(jsonRequest('http://x/api/settings', 'POST', { key: 'view.myshows', value: '{"sort":"name"}' }));
+    const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { key: 'view.myshows', value: null }));
+    expect(res.status).toBe(200);
+    const row = getDb().select().from(settingsTable).where(eq(settingsTable.key, 'view.myshows')).get();
+    expect(row).toBeUndefined();
+  });
+
+  it('400s on a non-whitelisted key', async () => {
+    const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { key: 'evil.key', value: 'x' }));
+    expect(res.status).toBe(400);
+    expect(getDb().select().from(settingsTable).where(eq(settingsTable.key, 'evil.key')).get()).toBeUndefined();
+  });
+
+  it('400s on invalid view.myshows JSON', async () => {
+    const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { key: 'view.myshows', value: 'not json{' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('400s on an oversized view.myshows payload', async () => {
+    const value = JSON.stringify({ blob: 'x'.repeat(5000) });
+    const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { key: 'view.myshows', value }));
+    expect(res.status).toBe(400);
+  });
+
+  it('400s on an invalid watch.region', async () => {
+    const res = await postSettings(jsonRequest('http://x/api/settings', 'POST', { key: 'watch.region', value: 'italy' }));
+    expect(res.status).toBe(400);
+  });
 });
 
 // --- import/match (real db) ------------------------------------------------

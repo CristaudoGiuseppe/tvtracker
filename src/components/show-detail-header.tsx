@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, cn } from "./ui";
-import { StarIcon, PlusIcon } from "./icons";
+import { cn } from "./ui";
+import { StarIcon } from "./icons";
 import { StatusMenu, type StoredStatus } from "./status-menu";
+import { AddShowIntent } from "./add-show-intent";
 import { toast } from "./toast";
 
 /* --------------------------- 1–10 star rating --------------------------- */
@@ -124,37 +125,6 @@ function FavoriteToggle({ showId, initial }: { showId: number; initial: boolean 
   );
 }
 
-/* --------------------------- Add to library ----------------------------- */
-
-function AddToLibrary({ tmdbId }: { tmdbId: number }) {
-  const router = useRouter();
-  const [pending, setPending] = useState(false);
-
-  async function add() {
-    if (pending) return;
-    setPending(true);
-    try {
-      const res = await fetch("/api/library/shows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tmdbId }),
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      router.refresh();
-    } catch {
-      toast("Impossibile aggiungere la serie.");
-      setPending(false);
-    }
-  }
-
-  return (
-    <Button onClick={add} disabled={pending} className="gap-1.5">
-      <PlusIcon className="h-4 w-4" />
-      {pending ? "Aggiungo…" : "Aggiungi alla libreria"}
-    </Button>
-  );
-}
-
 /* -------------------------------- Header -------------------------------- */
 
 export function ShowDetailControls({
@@ -171,7 +141,7 @@ export function ShowDetailControls({
   rating: number | null;
 }) {
   if (!inLibrary) {
-    return <AddToLibrary tmdbId={showId} />;
+    return <AddShowIntent tmdbId={showId} variant="hero" />;
   }
 
   return (
