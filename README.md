@@ -1,40 +1,46 @@
-## TVTracker
+# TVTracker
 
-A self-hosted TV/movie tracker (Next.js + SQLite) that runs on your own machine via Docker, with a permanent local data volume. It talks to TMDB for metadata and search.
+**A self-hosted TV & movie tracker you actually own.** Built as a personal replacement for [TV Time](https://en.wikipedia.org/wiki/TV_Time) when the service shut down in July 2026 — including a lossless importer for the official TV Time GDPR export (validated against a real 8-year account: ~14,000 episode check-ins across 350+ shows).
 
-### Prerequisites
+Runs entirely on your own machine in Docker. Your entire library lives in one SQLite file on a mounted volume — backup is copying a folder. The only external dependency is [TMDB](https://www.themoviedb.org/) for metadata, posters, and search (free personal API key).
 
-- Docker Desktop (macOS/Windows) or Docker Engine + Compose (Linux)
-- A [TMDB](https://www.themoviedb.org/settings/api) account with an API key (v3) and a Read Access Token (v4)
+> 🇮🇹 UI in italiano · [Guida rapida in italiano](#guida-rapida-italiano)
+> 🤖 Working on this repo with an AI coding agent? Start with [AGENTS.md](AGENTS.md).
 
-### Setup
+## Features
 
-1. Copy the env template and fill in your TMDB credentials:
+- **Watch Next** — one card per in-progress show with its next unwatched episode and a one-tap check-in that advances in place
+- **Show & movie detail** — season-by-season episode checklists, bulk "mark season/series watched", rewatch tracking, 1–10 ratings, favorites
+- **My Shows** — library grouped TV Time-style: Watching · Up to date · For later · Finished · Stopped
+- **Movies** — watchlist and watched tabs
+- **Upcoming** — air-date calendar for your followed shows, with season-premiere badges (metadata auto-refreshes daily)
+- **Explore** — TMDB trending rails + debounced full search, add anything in one tap
+- **Stats** — total time watched, top shows, top genres, 24-month activity chart, streaks
+- **TV Time import** — upload the GDPR ZIP, preview before committing, manual search-and-match for anything TMDB can't resolve automatically, idempotent re-runs (never duplicates), and nothing is ever silently dropped
+- **Data freedom** — one-click JSON export of everything; the SQLite file is yours
 
-   ```bash
-   cp .env.example .env
-   # edit .env and set TMDB_API_KEY and TMDB_READ_TOKEN
-   ```
+## Quick start
 
-   Leave `DATA_DIR=./data` in `.env` — that value is only used by `npm run dev`. In Docker, `docker-compose.yml` pins `DATA_DIR=/data` (the in-container mount point) regardless of what's in `.env`.
+Prerequisites: Docker (Desktop or Engine+Compose) and a free [TMDB API key](https://www.themoviedb.org/settings/api) (v3 key + v4 Read Access Token).
 
-2. Build and start the container:
+```bash
+cp .env.example .env      # then set TMDB_API_KEY and TMDB_READ_TOKEN
+docker compose up -d --build
+open http://localhost:3100
+```
 
-   ```bash
-   docker compose up -d --build
-   ```
+Then go to **Settings → Import** to bring in a TV Time export, or **Explore** to start from scratch.
 
-3. Open [http://localhost:3100](http://localhost:3100). (Set `TVTRACKER_PORT` in `.env` to publish on a different host port.)
+Notes:
 
-4. Go to **Settings → Import** to bring in an existing TV Time export, or use **Explore** to search TMDB and start adding shows/movies directly.
+- Set `TVTRACKER_PORT` in `.env` to publish on a different host port (container always listens on 3000 internally; default host port is 3100).
+- Leave `DATA_DIR=./data` in `.env` — it only affects `npm run dev`. In Docker, `docker-compose.yml` pins `DATA_DIR=/data` regardless.
 
-### Where your data lives
+## Where your data lives
 
-The SQLite database is written to `./data/tvtracker.db` on your host machine (bind-mounted into the container at `/data`). This directory is what makes your library, ratings, and watch history permanent across container restarts, rebuilds, and even reinstalls — as long as `./data` isn't deleted, your data is safe.
+The SQLite database is written to `./data/tvtracker.db` on your host (bind-mounted at `/data` in the container). That directory **is** your library — it survives container restarts, rebuilds, and reinstalls. As long as `./data` exists, your data is safe.
 
 ### Backup
-
-Just copy the `data` directory while the app isn't mid-write (a quick `docker compose stop` first is the safest option, though SQLite's WAL mode makes this low-risk even while running):
 
 ```bash
 docker compose stop
@@ -42,59 +48,84 @@ cp -r data data-backup-$(date +%Y%m%d)
 docker compose start
 ```
 
+(SQLite runs in WAL mode, so even a live copy is low-risk — stopping first is just the safest option.)
+
 ### Restore
 
 ```bash
 docker compose down
-rm -rf data
-cp -r data-backup-YYYYMMDD data
+rm -rf data && cp -r data-backup-YYYYMMDD data
 docker compose up -d
 ```
 
-### Update to a new version
+### Update
 
 ```bash
-git pull
-docker compose build
-docker compose up -d
+git pull && docker compose build && docker compose up -d
 ```
 
-Your `./data` directory is untouched by rebuilds — schema migrations (if any) run automatically at startup.
+`./data` is untouched by rebuilds; schema migrations run automatically at startup.
 
 ### Uninstall
 
-```bash
-docker compose down
+`docker compose down` stops and removes the container. Delete `./data` only if you want to permanently erase your library.
+
+## Importing from TV Time
+
+1. Get your GDPR export ZIP (while the service existed: `gdpr.tvtime.com/gdpr/self-service`).
+2. **Settings → Import**: drop the ZIP.
+3. Review the **preview**: how many shows, episodes, movies, and watchlist entries were recognized, plus a list of anything unmatched.
+4. Fix unmatched titles inline (search TMDB, pick the right one, "Ri-analizza") — or import now and fix later; unmatched items are reported, never dropped.
+5. Confirm. Original watch timestamps are preserved. Re-importing the same ZIP is safe (duplicates are skipped).
+
+Import details, for the curious: shows are matched exactly via their TVDB IDs through TMDB's `/find` endpoint; movies (name-only in the export) are matched by title + release year; rewatches are preserved with their own check-in rows.
+
+## Architecture
+
+One Next.js 15 (App Router) app serves both the UI and the API. All domain logic lives in plain, unit-tested TypeScript modules over SQLite. No external services except TMDB.
+
+```
+src/
+├── db/            # Drizzle schema + getDb() (better-sqlite3, WAL, auto-migrations)
+├── lib/
+│   ├── tmdb.ts    # the ONLY module that talks to TMDB (throttle ≤40req/10s, cache, retry, it-IT fallback)
+│   ├── library.ts # the ONLY module that mutates user data (check-ins, statuses, ratings)
+│   ├── watch-next.ts, stats.ts, sync.ts   # read-side computation
+│   └── importer/  # parse.ts (CSV/ZIP) → match.ts (TVDB→TMDB) → run.ts (dry-run + idempotent import)
+├── app/           # screens (server components) + thin /api routes (validation + delegation only)
+└── components/    # design system (ui.tsx) + screen components
 ```
 
-This stops and removes the container. Delete the `./data` directory only if you want to permanently erase your library.
+- **Stack:** Next.js 15 · TypeScript · Tailwind CSS 4 · Drizzle ORM + better-sqlite3 · Vitest (157 tests)
+- **Design:** dark cinematic theme, posters-as-interface, optimistic UI with revert-on-failure
+- **Single user, no auth** — it's yours, on localhost
 
-### Local development (no Docker)
+## Local development (no Docker)
 
 ```bash
 npm install
-npm run dev
+npm run dev        # http://localhost:3000, uses .env (DATA_DIR=./data)
+npx vitest run     # full test suite
+npx tsx scripts/seed-dev.ts   # seed a show for a non-empty dev UI
 ```
 
-Uses `.env` directly (`DATA_DIR=./data`, same TMDB credentials). Requires Node.js 22+.
+Requires Node.js 22+.
 
-### Notes on permissions
+## Permissions note
 
-The container runs as the non-root `node` user (uid 1000) baked into the `node:22-slim` base image. On Docker Desktop for macOS/Windows, the bind-mount file-sharing layer maps host permissions loosely, so this works out of the box. On native Linux hosts, if you hit a permission error writing to `./data`, run `sudo chown -R 1000:1000 ./data` once.
+The container runs as the non-root `node` user (uid 1000). Docker Desktop (macOS/Windows) maps bind-mount permissions loosely, so it works out of the box. On native Linux, if `./data` writes fail: `sudo chown -R 1000:1000 ./data` once.
+
+## Attribution
+
+This product uses the TMDB API but is not endorsed or certified by TMDB. TVTracker clones TV Time's *functionality*, not its assets — all artwork and branding here are original.
 
 ---
 
-## Guida rapida (Italiano)
+## Guida rapida (italiano)
 
 1. Copia `.env.example` in `.env` e inserisci le tue chiavi TMDB (`TMDB_API_KEY`, `TMDB_READ_TOKEN`). Lascia `DATA_DIR=./data` invariato.
-2. Avvia tutto con:
-   ```bash
-   docker compose up -d --build
-   ```
-3. Apri [http://localhost:3100](http://localhost:3100). (Imposta `TVTRACKER_PORT` in `.env` per usare una porta host diversa.)
-4. Usa **Settings → Import** per importare un export da TV Time, oppure **Explore** per cercare e aggiungere serie/film.
+2. Avvia: `docker compose up -d --build`
+3. Apri [http://localhost:3100](http://localhost:3100) (imposta `TVTRACKER_PORT` in `.env` per cambiare porta).
+4. **Impostazioni → Importa** per l'export di TV Time, oppure **Esplora** per aggiungere serie e film.
 
-**Backup**: copia la cartella `data` (contiene il database SQLite — è tutta la tua libreria).
-**Ripristino**: sostituisci `data` con una copia di backup, poi `docker compose up -d`.
-**Aggiornamento**: `git pull && docker compose build && docker compose up -d`.
-**Sviluppo locale**: `npm install && npm run dev`.
+**Backup**: copia la cartella `data` (è tutta la tua libreria). **Ripristino**: sostituisci `data` con il backup e riavvia. **Aggiornamento**: `git pull && docker compose build && docker compose up -d`. **Sviluppo**: `npm install && npm run dev`.
