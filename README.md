@@ -24,7 +24,7 @@ A self-hosted TV/movie tracker (Next.js + SQLite) that runs on your own machine 
    docker compose up -d --build
    ```
 
-3. Open [http://localhost:3000](http://localhost:3000).
+3. Open [http://localhost:3100](http://localhost:3100). (Set `TVTRACKER_PORT` in `.env` to publish on a different host port.)
 
 4. Go to **Settings → Import** to bring in an existing TV Time export, or use **Explore** to search TMDB and start adding shows/movies directly.
 
@@ -91,7 +91,7 @@ The container runs as the non-root `node` user (uid 1000) baked into the `node:2
    ```bash
    docker compose up -d --build
    ```
-3. Apri [http://localhost:3000](http://localhost:3000).
+3. Apri [http://localhost:3100](http://localhost:3100). (Imposta `TVTRACKER_PORT` in `.env` per usare una porta host diversa.)
 4. Usa **Settings → Import** per importare un export da TV Time, oppure **Explore** per cercare e aggiungere serie/film.
 
 **Backup**: copia la cartella `data` (contiene il database SQLite — è tutta la tua libreria).

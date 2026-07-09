@@ -40,13 +40,13 @@ ENV HOSTNAME=0.0.0.0
 # Copy the fully-built better-sqlite3 package explicitly so the compiled
 # binary from the deps stage is guaranteed to be present, regardless of
 # what the tracer picked up.
-COPY --from=deps /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
-COPY --from=deps /app/node_modules/bindings ./node_modules/bindings
-COPY --from=deps /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
-
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+
+COPY --from=deps /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=deps /app/node_modules/bindings ./node_modules/bindings
+COPY --from=deps /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
 
 # node:22-slim ships a built-in non-root `node` user (uid/gid 1000). /data
 # is a bind mount from the host (./data:/data); on Docker Desktop for

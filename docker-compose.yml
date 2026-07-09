@@ -3,7 +3,7 @@ services:
     build: .
     container_name: tvtracker
     ports:
-      - "3000:3000"
+      - "${TVTRACKER_PORT:-3100}:3000"
     volumes:
       - ./data:/data
     env_file: .env
