@@ -12,6 +12,7 @@ import { ArrowLeftIcon } from "@/components/icons";
 import { ShowDetailControls } from "@/components/show-detail-header";
 import { SeasonTabs, type SeasonVM } from "@/components/season-tabs";
 import { ProvidersRow } from "@/components/providers-row";
+import { seasonProgress } from "@/lib/season-progress";
 import type { StoredStatus } from "@/components/status-menu";
 
 export const dynamic = "force-dynamic";
@@ -157,6 +158,14 @@ export default async function ShowDetailPage({
     0,
   );
 
+  // Per-season aired/watched counts for the season chip picker (derived here,
+  // server-side, from the episodes+watches already loaded — no schema change).
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const seasonsWithProgress = vm.seasons.map((s) => ({
+    ...s,
+    ...seasonProgress(s.episodes, todayStr),
+  }));
+
   return (
     <div className="-mx-5 -mt-6 sm:-mx-8 md:-mx-10 md:-mt-10">
       {/* ------------------------------- Hero ------------------------------- */}
@@ -253,7 +262,7 @@ export default async function ShowDetailPage({
       {/* ----------------------------- Episodes ----------------------------- */}
       <div className="space-y-8 px-5 py-8 sm:px-8 md:px-10">
         <ProvidersRow json={vm.watchProviders} />
-        <SeasonTabs showId={vm.showId} seasons={vm.seasons} inLibrary={vm.inLibrary} />
+        <SeasonTabs showId={vm.showId} seasons={seasonsWithProgress} inLibrary={vm.inLibrary} />
       </div>
     </div>
   );

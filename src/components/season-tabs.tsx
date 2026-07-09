@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, cn } from "./ui";
 import { CheckIcon } from "./icons";
@@ -13,16 +13,29 @@ export type SeasonVM = {
   episodes: EpisodeVM[];
 };
 
-function seasonLabel(s: SeasonVM): string {
+// What the picker actually renders: a season plus its server-derived counts.
+export type SeasonChipVM = SeasonVM & {
+  airedCount: number;
+  watchedCount: number;
+};
+
+function seasonLabel(s: SeasonChipVM): string {
   if (s.seasonNumber === 0) return "Speciali";
   return `Stagione ${s.seasonNumber}`;
 }
 
-function seasonProgress(s: SeasonVM): { watched: number; aired: number } {
-  const today = new Date().toISOString().slice(0, 10);
-  const aired = s.episodes.filter((e) => e.airDate !== null && e.airDate <= today);
-  const watched = aired.filter((e) => e.watched);
-  return { watched: watched.length, aired: aired.length };
+// Short glyph shown inside the compact chip; full label lives in aria-label.
+function chipGlyph(s: SeasonChipVM): string {
+  return s.seasonNumber === 0 ? "Sp" : String(s.seasonNumber);
+}
+
+type ChipState = "unwatched" | "partial" | "complete";
+
+function chipState(s: SeasonChipVM): ChipState {
+  if (s.airedCount === 0) return "unwatched";
+  if (s.watchedCount >= s.airedCount) return "complete";
+  if (s.watchedCount > 0) return "partial";
+  return "unwatched";
 }
 
 export function SeasonTabs({
@@ -31,18 +44,18 @@ export function SeasonTabs({
   inLibrary,
 }: {
   showId: number;
-  seasons: SeasonVM[];
+  seasons: SeasonChipVM[];
   inLibrary: boolean;
 }) {
   const router = useRouter();
-  const firstUnfinished = seasons.findIndex((s) => {
-    const p = seasonProgress(s);
-    return p.aired > 0 && p.watched < p.aired;
-  });
+  const firstUnfinished = seasons.findIndex(
+    (s) => s.airedCount > 0 && s.watchedCount < s.airedCount,
+  );
   const [active, setActive] = useState(
     firstUnfinished >= 0 ? firstUnfinished : Math.max(0, seasons.length - 1),
   );
   const [busy, setBusy] = useState<null | "season" | "all">(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   if (seasons.length === 0) return null;
   const current = seasons[active] ?? seasons[0];
@@ -65,38 +78,90 @@ export function SeasonTabs({
     }
   }
 
-  const cp = seasonProgress(current);
-  const seasonComplete = cp.aired > 0 && cp.watched >= cp.aired;
+  // Roving-tabindex keyboard nav across the wrapped grid (APG tablist pattern).
+  function onKeyDown(e: React.KeyboardEvent, i: number) {
+    let next = i;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (i + 1) % seasons.length;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp")
+      next = (i - 1 + seasons.length) % seasons.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = seasons.length - 1;
+    else return;
+    e.preventDefault();
+    setActive(next);
+    tabRefs.current[next]?.focus();
+  }
+
+  const seasonComplete = current.airedCount > 0 && current.watchedCount >= current.airedCount;
+  const currentHasAired = current.airedCount > 0;
+  const panelId = `season-panel-${showId}`;
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Season tab strip */}
+    <section className="space-y-5">
+      <div className="flex flex-col gap-4">
+        {/* Wrapping season chip grid — every season visible, no horizontal scroll. */}
         <div
           role="tablist"
           aria-label="Stagioni"
-          className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
+          className="flex flex-wrap gap-2"
         >
           {seasons.map((s, i) => {
             const isActive = i === active;
-            const p = seasonProgress(s);
-            const complete = p.aired > 0 && p.watched >= p.aired;
+            const isSpecials = s.seasonNumber === 0;
+            const state = inLibrary ? chipState(s) : "unwatched";
+            const pct =
+              s.airedCount > 0 ? Math.min(1, s.watchedCount / s.airedCount) : 0;
             return (
               <button
                 key={s.seasonNumber}
+                ref={(el) => {
+                  tabRefs.current[i] = el;
+                }}
                 role="tab"
+                type="button"
                 aria-selected={isActive}
+                aria-controls={panelId}
+                aria-label={seasonLabel(s)}
+                tabIndex={isActive ? 0 : -1}
                 onClick={() => setActive(i)}
+                onKeyDown={(e) => onKeyDown(e, i)}
                 className={cn(
-                  "inline-flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-150 ease-quint",
-                  isActive
-                    ? "bg-surface-2 text-ink ring-1 ring-line-strong"
-                    : "text-muted hover:bg-surface hover:text-ink",
+                  "group relative grid h-11 min-w-[2.75rem] place-items-center overflow-hidden rounded-xl px-2.5",
+                  "text-sm font-bold tabular-nums outline-none",
+                  "transition-[transform,background-color,color,box-shadow] duration-200 ease-quint",
+                  "focus-visible:ring-2 focus-visible:ring-accent/60",
+                  "active:scale-[0.94]",
+                  // Watch-state skin (orthogonal to selection).
+                  state === "complete" &&
+                    "bg-[color-mix(in_oklab,var(--color-accent)_16%,var(--color-surface))] text-accent-hi ring-1 ring-inset ring-accent/35",
+                  state === "partial" &&
+                    "bg-surface-2 text-ink ring-1 ring-inset ring-line",
+                  state === "unwatched" &&
+                    "bg-surface text-muted ring-1 ring-inset ring-line hover:text-ink hover:ring-line-strong",
+                  // Specials: de-emphasized.
+                  isSpecials && !isActive && "opacity-60",
+                  // Selection: a distinct bright frame + lift, independent of state.
+                  isActive &&
+                    "text-ink shadow-pop ring-2 ring-ink/80 ring-offset-2 ring-offset-canvas",
                 )}
               >
-                {seasonLabel(s)}
-                {complete && inLibrary && (
-                  <CheckIcon className="h-3.5 w-3.5 text-accent" strokeWidth={3} />
+                <span className="relative z-10 flex items-center gap-1">
+                  {chipGlyph(s)}
+                  {state === "complete" && (
+                    <CheckIcon
+                      className="h-3.5 w-3.5"
+                      strokeWidth={3}
+                      aria-hidden="true"
+                    />
+                  )}
+                </span>
+                {/* Partial progress: a thin fill pinned to the chip's bottom edge. */}
+                {state === "partial" && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-1 bottom-1 h-[3px] origin-left rounded-full bg-accent/80 transition-transform duration-500 ease-quint"
+                    style={{ transform: `scaleX(${pct})` }}
+                  />
                 )}
               </button>
             );
@@ -104,40 +169,49 @@ export function SeasonTabs({
         </div>
 
         {inLibrary && (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy !== null}
-            onClick={() => markWatched({ showId }, "all")}
-          >
-            {busy === "all" ? "Aggiorno…" : "Segna tutte come viste"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {currentHasAired && (
+              <span className="text-xs text-muted tabular-nums">
+                {current.watchedCount}/{current.airedCount} episodi visti in{" "}
+                {seasonLabel(current).toLowerCase()}
+              </span>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              {currentHasAired && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={busy !== null || seasonComplete}
+                  onClick={() =>
+                    markWatched({ showId, seasonNumber: current.seasonNumber }, "season")
+                  }
+                >
+                  {busy === "season"
+                    ? "Aggiorno…"
+                    : seasonComplete
+                      ? "Stagione completata"
+                      : "Segna stagione come vista"}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy !== null}
+                onClick={() => markWatched({ showId }, "all")}
+              >
+                {busy === "all" ? "Aggiorno…" : "Segna tutte come viste"}
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 
-      {inLibrary && current.episodes.some((e) => e.airDate !== null) && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3.5 py-2.5">
-          <span className="text-xs text-muted tabular-nums">
-            {cp.watched}/{cp.aired} episodi visti in questa stagione
-          </span>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy !== null || seasonComplete}
-            onClick={() =>
-              markWatched({ showId, seasonNumber: current.seasonNumber }, "season")
-            }
-          >
-            {busy === "season"
-              ? "Aggiorno…"
-              : seasonComplete
-                ? "Stagione completata"
-                : "Segna stagione come vista"}
-          </Button>
-        </div>
-      )}
-
-      <div className="divide-y divide-line/60">
+      <div
+        id={panelId}
+        role="tabpanel"
+        aria-label={seasonLabel(current)}
+        className="divide-y divide-line/60"
+      >
         {current.episodes.map((ep) => (
           <EpisodeRow
             key={`${ep.tmdbId}-${ep.watchCount}`}
