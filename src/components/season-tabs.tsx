@@ -127,24 +127,44 @@ export function SeasonTabs({
                 onKeyDown={(e) => onKeyDown(e, i)}
                 className={cn(
                   "group relative grid h-11 min-w-[2.75rem] place-items-center overflow-hidden rounded-xl px-2.5",
-                  "text-sm font-bold tabular-nums outline-none",
+                  "text-sm font-bold tabular-nums",
                   "transition-[transform,background-color,color,box-shadow] duration-200 ease-quint",
-                  "focus-visible:ring-2 focus-visible:ring-accent/60",
+                  // House focus pattern. While focused, the focus-visible ring
+                  // replaces the watch-state ring deterministically: the variant
+                  // selector's specificity (0,2,0) beats the base ring's (0,1,0)
+                  // regardless of stylesheet order.
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
                   "active:scale-[0.94]",
-                  // Watch-state skin (orthogonal to selection).
+                  // Watch-state skin — SOLE owner of bg/text/ring on the button.
+                  // Branches are mutually exclusive, so no two utilities compete
+                  // for the same property here.
                   state === "complete" &&
                     "bg-[color-mix(in_oklab,var(--color-accent)_16%,var(--color-surface))] text-accent-hi ring-1 ring-inset ring-accent/35",
                   state === "partial" &&
                     "bg-surface-2 text-ink ring-1 ring-inset ring-line",
                   state === "unwatched" &&
-                    "bg-surface text-muted ring-1 ring-inset ring-line hover:text-ink hover:ring-line-strong",
+                    cn(
+                      "bg-surface ring-1 ring-inset ring-line",
+                      isActive
+                        ? "text-ink"
+                        : "text-muted hover:text-ink hover:ring-line-strong",
+                    ),
                   // Specials: de-emphasized.
                   isSpecials && !isActive && "opacity-60",
-                  // Selection: a distinct bright frame + lift, independent of state.
-                  isActive &&
-                    "text-ink shadow-pop ring-2 ring-ink/80 ring-offset-2 ring-offset-canvas",
+                  // Selection lift only — the visible frame is the border span
+                  // below (border property on a child element: structurally
+                  // unable to collide with the button's ring utilities).
+                  isActive && "shadow-pop",
                 )}
               >
+                {/* Selection frame: dedicated element + border property, fully
+                    independent of the watch-state ring styling. */}
+                {isActive && (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 rounded-[inherit] border-2 border-ink/85"
+                  />
+                )}
                 <span className="relative z-10 flex items-center gap-1">
                   {chipGlyph(s)}
                   {state === "complete" && (
