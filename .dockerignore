@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+data
+import
+docs
+tests
+.superpowers
+.env
+.env.local
+tasks
+.DS_Store
+npm-debug.log*
+coverage

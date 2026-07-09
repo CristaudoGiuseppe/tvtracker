@@ -1,0 +1,15 @@
+services:
+  tvtracker:
+    build: .
+    container_name: tvtracker
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+    env_file: .env
+    environment:
+      # Pin the in-container data path regardless of what DATA_DIR is set
+      # to in .env (that file is shared with `npm run dev`, where it's
+      # ./data). `environment:` overrides `env_file:`, so this always wins.
+      DATA_DIR: /data
+    restart: unless-stopped
