@@ -7,6 +7,8 @@ const WHITELIST: Record<string, (value: string) => string | null> = {
   'tmdb.language': (v) =>
     v === 'it-IT' || v === 'en-US' ? null : "value must be 'it-IT' or 'en-US'",
   'watch.region': (v) => (/^[A-Z]{2}$/.test(v) ? null : 'value must be a 2-letter region code'),
+  // Write-side bounds only (valid JSON, size cap); the read side (restoreView in
+  // src/app/shows/page.tsx) independently re-validates the stored shape field by field.
   'view.myshows': (v) => {
     if (v.length > MAX_VIEW_BYTES) return 'view.myshows exceeds the size limit';
     try {

@@ -140,28 +140,62 @@ export function MyShowsLibrary({
 }) {
   const [view, setView] = useState<MyShowsView>(initialView);
   const mounted = useRef(false);
+  const pendingBody = useRef<string | null>(null); // serialized save not yet POSTed
+  const skipNextSave = useRef(false); // reset() persists directly; skip its debounce pass
+
+  function persist(body: string, keepalive = false) {
+    fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive,
+    }).catch(() => {
+      /* best-effort persistence; the UI stays authoritative */
+    });
+  }
 
   // Auto-save the toolbar state, debounced. Returning to the default clears the
-  // stored key so a fresh load starts clean (unifies "Reimposta" with manual reset).
+  // stored key so a fresh load starts clean (matches what "Reimposta" stores).
   useEffect(() => {
     if (!mounted.current) {
       mounted.current = true;
       return;
     }
-    const t = setTimeout(() => {
-      const body = isDefaultView(view)
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
+    pendingBody.current = JSON.stringify(
+      isDefaultView(view)
         ? { key: "view.myshows", value: null }
-        : { key: "view.myshows", value: JSON.stringify(view) };
-      fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }).catch(() => {
-        /* best-effort persistence; the UI stays authoritative */
-      });
+        : { key: "view.myshows", value: JSON.stringify(view) },
+    );
+    const t = setTimeout(() => {
+      if (pendingBody.current !== null) {
+        persist(pendingBody.current);
+        pendingBody.current = null;
+      }
     }, 500);
     return () => clearTimeout(t);
   }, [view]);
+
+  // Flush a still-debouncing save on unmount; keepalive lets the POST survive navigation.
+  useEffect(() => {
+    return () => {
+      if (pendingBody.current !== null) {
+        persist(pendingBody.current, true);
+        pendingBody.current = null;
+      }
+    };
+  }, []);
+
+  // "Reimposta" acts instantly: clear the stored key now instead of riding the debounce.
+  function reset() {
+    if (!isDefaultView(view)) skipNextSave.current = true; // guard: a bailed-out setView would leak the skip
+    pendingBody.current = null;
+    setView(DEFAULT_VIEW);
+    persist(JSON.stringify({ key: "view.myshows", value: null }));
+  }
 
   const visible = useMemo(() => applyView(sections, view), [sections, view]);
 
@@ -170,7 +204,7 @@ export function MyShowsLibrary({
       <LibraryToolbar
         view={view}
         onChange={setView}
-        onReset={() => setView(DEFAULT_VIEW)}
+        onReset={reset}
         platformOptions={platformOptions}
         genreOptions={genreOptions}
         statusOptions={statusOptions}
@@ -182,7 +216,7 @@ export function MyShowsLibrary({
           <p className="text-sm text-muted">Nessuna serie corrisponde ai filtri.</p>
           <button
             type="button"
-            onClick={() => setView(DEFAULT_VIEW)}
+            onClick={reset}
             className="text-sm font-medium text-accent hover:text-accent-hi"
           >
             Azzera i filtri
