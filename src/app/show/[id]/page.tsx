@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getShowDetail, type DetailSeason } from "@/lib/watch-next";
+import {
+  getShowDetail,
+  libraryGroupFor,
+  type DetailSeason,
+  type LibraryGroup,
+} from "@/lib/watch-next";
 import { getShowFull, TmdbError } from "@/lib/tmdb";
 import { ProgressBar, StatusBadge, Poster, type LibraryStatus } from "@/components/ui";
 import { ArrowLeftIcon } from "@/components/icons";
@@ -22,11 +27,21 @@ function parseGenres(json: string | null): string[] {
   }
 }
 
-function badgeKey(stored: StoredStatus, upToDate: boolean): LibraryStatus {
-  if (stored === "watching") return upToDate ? "caught_up" : "watching";
-  if (stored === "for_later") return "to_watch";
-  if (stored === "stopped") return "dropped";
-  return "finished";
+// Display group (shared rule in lib/watch-next) -> StatusBadge key.
+const GROUP_BADGE: Record<LibraryGroup, LibraryStatus> = {
+  watching: "watching",
+  to_start: "to_start",
+  up_to_date: "caught_up",
+  for_later: "to_watch",
+  finished: "finished",
+  stopped: "dropped",
+};
+
+function badgeKey(
+  stored: StoredStatus,
+  progress: { upToDate: boolean; watchedCount: number },
+): LibraryStatus {
+  return GROUP_BADGE[libraryGroupFor(stored, progress)];
 }
 
 function seasonSort(a: number, b: number): number {
@@ -182,7 +197,12 @@ export default async function ShowDetailPage({
 
               <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted">
                 {vm.inLibrary && (
-                  <StatusBadge status={badgeKey(vm.storedStatus!, vm.upToDate)} />
+                  <StatusBadge
+                    status={badgeKey(vm.storedStatus!, {
+                      upToDate: vm.upToDate,
+                      watchedCount: vm.watchedCount,
+                    })}
+                  />
                 )}
                 {vm.genres.slice(0, 3).map((g) => (
                   <span key={g} className="text-faint">

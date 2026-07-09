@@ -7,6 +7,7 @@ import {
   getWatchNextList,
   getUpcoming,
   getLibraryGrouped,
+  libraryGroupFor,
 } from '../src/lib/watch-next';
 
 // --- date helpers: relative to real "today" so fixtures never go stale ---
@@ -282,6 +283,20 @@ describe('watch-next', () => {
 
       const grouped = getLibraryGrouped();
       expect(grouped.stopped.map(r => r.show.tmdbId)).toEqual([45]);
+    });
+  });
+
+  describe('libraryGroupFor', () => {
+    it('classifies stored "watching" by progress: up_to_date > to_start > watching', () => {
+      expect(libraryGroupFor('watching', { upToDate: true, watchedCount: 5 })).toBe('up_to_date');
+      expect(libraryGroupFor('watching', { upToDate: false, watchedCount: 0 })).toBe('to_start');
+      expect(libraryGroupFor('watching', { upToDate: false, watchedCount: 1 })).toBe('watching');
+    });
+
+    it('maps non-watching stored statuses straight through', () => {
+      expect(libraryGroupFor('for_later', { upToDate: false, watchedCount: 0 })).toBe('for_later');
+      expect(libraryGroupFor('finished', { upToDate: true, watchedCount: 10 })).toBe('finished');
+      expect(libraryGroupFor('stopped', { upToDate: false, watchedCount: 3 })).toBe('stopped');
     });
   });
 });

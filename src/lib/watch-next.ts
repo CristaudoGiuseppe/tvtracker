@@ -6,13 +6,27 @@ export type ShowRow = typeof shows.$inferSelect;
 export type EpisodeRow = typeof episodes.$inferSelect;
 export type LibraryShowRow = typeof libraryShows.$inferSelect;
 
-type LibraryGroup = 'watching' | 'to_start' | 'up_to_date' | 'for_later' | 'finished' | 'stopped';
+export type LibraryGroup = 'watching' | 'to_start' | 'up_to_date' | 'for_later' | 'finished' | 'stopped';
 
 export interface ShowProgress {
   airedCount: number;
   watchedCount: number;
   nextEpisode: EpisodeRow | null;
   upToDate: boolean;
+}
+
+/**
+ * Single display-classification rule, shared by getLibraryGrouped and the show-detail badge:
+ * stored 'watching' splits into 'up_to_date' (all aired watched), 'to_start' (never watched
+ * an episode) or 'watching'; other stored statuses map straight through.
+ */
+export function libraryGroupFor(
+  status: LibraryShowRow['status'],
+  progress: Pick<ShowProgress, 'upToDate' | 'watchedCount'>,
+): LibraryGroup {
+  if (status !== 'watching') return status as LibraryGroup;
+  if (progress.upToDate) return 'up_to_date';
+  return progress.watchedCount === 0 ? 'to_start' : 'watching';
 }
 
 function today(): string {
@@ -235,13 +249,7 @@ export function getLibraryGrouped(): Record<LibraryGroup, { show: ShowRow; lib: 
     const show = db.select().from(shows).where(eq(shows.tmdbId, lib.showId)).get();
     if (!show) continue;
     const progress = getShowProgress(lib.showId);
-    let group: LibraryGroup;
-    if (lib.status === 'watching') {
-      group = progress.upToDate ? 'up_to_date' : progress.watchedCount === 0 ? 'to_start' : 'watching';
-    } else {
-      group = lib.status as LibraryGroup;
-    }
-    grouped[group].push({ show, lib, progress });
+    grouped[libraryGroupFor(lib.status, progress)].push({ show, lib, progress });
   }
   return grouped;
 }
