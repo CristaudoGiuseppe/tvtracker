@@ -35,7 +35,7 @@ describe('matchExport', () => {
         tvId: id === 100 ? 555 : null,
       }));
       const parsed = emptyParsed();
-      parsed.episodeWatches.push({ tvdbSeriesId: 100, seriesName: 'Known', season: 1, episode: 1, watchedAt: 'x', isRewatch: false });
+      parsed.episodeWatches.push({ tvdbSeriesId: 100, seriesName: 'Known', season: 1, episode: 1, watchedAt: 'x', isRewatch: false, tvdbEpisodeId: null });
       parsed.showFollows.push({ tvdbSeriesId: 200, seriesName: 'Unknown', isForLater: false, isArchived: false, followedAt: 'x' });
 
       const result = await matchExport(parsed);
@@ -47,7 +47,7 @@ describe('matchExport', () => {
     it('dedups shows across episodeWatches and showFollows (one lookup each)', async () => {
       vi.mocked(findByTvdbId).mockResolvedValue({ tvId: 42 });
       const parsed = emptyParsed();
-      parsed.episodeWatches.push({ tvdbSeriesId: 7, seriesName: 'Dup', season: 1, episode: 1, watchedAt: 'x', isRewatch: false });
+      parsed.episodeWatches.push({ tvdbSeriesId: 7, seriesName: 'Dup', season: 1, episode: 1, watchedAt: 'x', isRewatch: false, tvdbEpisodeId: null });
       parsed.showFollows.push({ tvdbSeriesId: 7, seriesName: 'Dup', isForLater: false, isArchived: false, followedAt: 'x' });
 
       const result = await matchExport(parsed);

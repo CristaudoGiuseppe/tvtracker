@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { parseExport } from '../src/lib/importer/parse';
 
 const FIX = join(__dirname, 'fixtures', 'tvtime');
@@ -34,6 +36,20 @@ describe('parseExport', () => {
       for (const e of parsed.episodeWatches) {
         expect(Number.isFinite(e.tvdbSeriesId)).toBe(true);
         expect(e.seriesName.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('carries the tvdb episode id (ep_id) on each episode watch', () => {
+      const troll = parsed.episodeWatches.find(
+        e => e.tvdbSeriesId === 318201 && e.season === 2 && e.episode === 7,
+      );
+      expect(troll?.tvdbEpisodeId).toBe(6453863);
+      const twd = parsed.episodeWatches.find(
+        e => e.tvdbSeriesId === 153021 && e.season === 3 && e.episode === 10,
+      );
+      expect(twd?.tvdbEpisodeId).toBe(4444269);
+      for (const e of parsed.episodeWatches) {
+        expect(typeof e.tvdbEpisodeId).toBe('number');
       }
     });
 
@@ -78,6 +94,23 @@ describe('parseExport', () => {
       // Barbie is a watch row; ensure it is present exactly once
       expect(parsed.movieWatches.filter(m => m.movieName === 'Barbie')).toHaveLength(1);
       expect(names.size).toBe(parsed.movieWatches.length);
+    });
+  });
+
+  describe('tvdbEpisodeId null path (column absent / empty)', () => {
+    it('sets tvdbEpisodeId to null when ep_id is absent or empty', () => {
+      const dir = mkdtempSync(join(tmpdir(), 'tvt-parse-'));
+      // First episode row omits ep_id entirely (column present but empty); the
+      // header intentionally has no dedicated numeric ep_id for row 2 (empty string).
+      const csv = [
+        'user_id,created_at,s_id,ep_id,key,series_name,season_number,episode_number',
+        '1,2020-01-01 00:00:00,900,,watch-episode-a,Show Z,1,1',
+        '1,2020-01-02 00:00:00,900,,watch-episode-b,Show Z,1,2',
+      ].join('\n');
+      writeFileSync(join(dir, 'tracking-prod-records-v2.csv'), csv);
+      const parsed = parseExport(dir);
+      expect(parsed.episodeWatches).toHaveLength(2);
+      expect(parsed.episodeWatches.every(e => e.tvdbEpisodeId === null)).toBe(true);
     });
   });
 

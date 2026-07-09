@@ -146,6 +146,23 @@ export async function findByTvdbId(tvdbId: number): Promise<{ tvId: number | nul
   return { tvId: data.tv_results?.[0]?.id ?? null };
 }
 
+/** Resolves a TVDB episode id to its precise TMDB episode via /find. Returns
+ * null when TMDB has no matching episode. Used by the importer to recover
+ * check-ins whose TVDB↔TMDB (season,episode) numbering disagrees. */
+export async function findEpisodeByTvdbId(
+  tvdbEpisodeId: number,
+): Promise<{ episodeTmdbId: number; showTmdbId: number; seasonNumber: number; episodeNumber: number } | null> {
+  const data = await tmdbGet(`/find/${tvdbEpisodeId}`, { external_source: 'tvdb_id' });
+  const ep = data.tv_episode_results?.[0];
+  if (!ep) return null;
+  return {
+    episodeTmdbId: ep.id,
+    showTmdbId: ep.show_id,
+    seasonNumber: ep.season_number,
+    episodeNumber: ep.episode_number,
+  };
+}
+
 function mapEpisode(raw: any): TmdbEpisode {
   return {
     id: raw.id,

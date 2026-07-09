@@ -4,12 +4,24 @@ import { watches, libraryShows, libraryMovies } from '../src/db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { TmdbShowFull, TmdbMovie } from '../src/lib/tmdb';
 
-vi.mock('../src/lib/tmdb', () => ({
-  getShowFull: vi.fn(),
-  getMovie: vi.fn(),
-}));
+vi.mock('../src/lib/tmdb', () => {
+  class TmdbError extends Error {
+    status?: number;
+    constructor(message: string, status?: number) {
+      super(message);
+      this.name = 'TmdbError';
+      this.status = status;
+    }
+  }
+  return {
+    getShowFull: vi.fn(),
+    getMovie: vi.fn(),
+    findEpisodeByTvdbId: vi.fn(),
+    TmdbError,
+  };
+});
 
-import { getShowFull, getMovie } from '../src/lib/tmdb';
+import { getShowFull, getMovie, findEpisodeByTvdbId, TmdbError } from '../src/lib/tmdb';
 import { dryRun, runImport } from '../src/lib/importer/run';
 import type { ParsedExport } from '../src/lib/importer/parse';
 import type { MatchedExport } from '../src/lib/importer/match';
@@ -44,10 +56,10 @@ const movieY: TmdbMovie = { id: 7002, title: 'Movie Y', overview: '', poster_pat
 function scenario(): { parsed: ParsedExport; matched: MatchedExport } {
   const parsed: ParsedExport = {
     episodeWatches: [
-      { tvdbSeriesId: 100, seriesName: 'Show A', season: 1, episode: 1, watchedAt: '2020-01-01 00:00:00', isRewatch: false },
-      { tvdbSeriesId: 100, seriesName: 'Show A', season: 1, episode: 1, watchedAt: '2021-01-01 00:00:00', isRewatch: true },
-      { tvdbSeriesId: 100, seriesName: 'Show A', season: 1, episode: 2, watchedAt: '2020-02-01 00:00:00', isRewatch: false },
-      { tvdbSeriesId: 100, seriesName: 'Show A', season: 9, episode: 9, watchedAt: '2020-03-01 00:00:00', isRewatch: false },
+      { tvdbSeriesId: 100, seriesName: 'Show A', season: 1, episode: 1, watchedAt: '2020-01-01 00:00:00', isRewatch: false, tvdbEpisodeId: null },
+      { tvdbSeriesId: 100, seriesName: 'Show A', season: 1, episode: 1, watchedAt: '2021-01-01 00:00:00', isRewatch: true, tvdbEpisodeId: null },
+      { tvdbSeriesId: 100, seriesName: 'Show A', season: 1, episode: 2, watchedAt: '2020-02-01 00:00:00', isRewatch: false, tvdbEpisodeId: null },
+      { tvdbSeriesId: 100, seriesName: 'Show A', season: 9, episode: 9, watchedAt: '2020-03-01 00:00:00', isRewatch: false, tvdbEpisodeId: null },
     ],
     showFollows: [
       { tvdbSeriesId: 100, seriesName: 'Show A', isForLater: false, isArchived: false, followedAt: 'x' },
@@ -88,6 +100,7 @@ beforeEach(() => {
     if (id === 7002) return movieY;
     throw new Error(`unexpected movie ${id}`);
   });
+  vi.mocked(findEpisodeByTvdbId).mockReset().mockResolvedValue(null);
 });
 
 describe('dryRun', () => {
@@ -227,5 +240,114 @@ describe('runImport', () => {
     // Show B still imported despite Show A failing
     const db = getDb();
     expect(db.select().from(libraryShows).where(eq(libraryShows.showId, 6002)).get()).toBeDefined();
+  });
+});
+
+describe('runImport: ep_id recovery of mismatched episodes', () => {
+  // The S9E9 watch never resolves by (season,episode); recovery maps its ep_id
+  // onto Show A's real S3E10 episode (tmdb id 10310), already cached by addShow.
+  function recoveryScenario(tvdbEpisodeId: number | null): { parsed: ParsedExport; matched: MatchedExport } {
+    const { parsed, matched } = scenario();
+    parsed.episodeWatches = [
+      { tvdbSeriesId: 100, seriesName: 'Show A', season: 9, episode: 9, watchedAt: '2020-03-01 00:00:00', isRewatch: false, tvdbEpisodeId },
+    ];
+    parsed.showFollows = [{ tvdbSeriesId: 100, seriesName: 'Show A', isForLater: false, isArchived: false, followedAt: 'x' }];
+    parsed.movieWatches = [];
+    parsed.movieWatchlist = [];
+    matched.shows = [{ tvdbSeriesId: 100, seriesName: 'Show A', tmdbId: 5001 }];
+    matched.movies = [];
+    return { parsed, matched };
+  }
+
+  it('recovers a mismatched episode via its ep_id and counts it under recoveredByEpisodeId', async () => {
+    const { parsed, matched } = recoveryScenario(55501);
+    vi.mocked(findEpisodeByTvdbId).mockResolvedValue({
+      episodeTmdbId: 10310, showTmdbId: 5001, seasonNumber: 3, episodeNumber: 10,
+    });
+
+    const report = await runImport(parsed, matched);
+    const db = getDb();
+
+    expect(report.recoveredByEpisodeId).toBe(1);
+    expect(report.imported.episodes).toBe(1);
+    expect(report.episodeMismatches).toEqual([]);
+    expect(vi.mocked(findEpisodeByTvdbId)).toHaveBeenCalledWith(55501);
+
+    const rows = db.select().from(watches).where(and(eq(watches.kind, 'episode'), eq(watches.episodeId, 10310))).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].showId).toBe(5001); // episode's own show
+    expect(rows[0].watchedAt).toBe('2020-03-01 00:00:00');
+  });
+
+  it('keeps the row as a mismatch when find returns null', async () => {
+    const { parsed, matched } = recoveryScenario(55502);
+    vi.mocked(findEpisodeByTvdbId).mockResolvedValue(null);
+
+    const report = await runImport(parsed, matched);
+    expect(report.recoveredByEpisodeId).toBe(0);
+    expect(report.imported.episodes).toBe(0);
+    expect(report.episodeMismatches).toEqual([{ show: 'Show A', season: 9, episode: 9, count: 1 }]);
+  });
+
+  it('keeps the row as a mismatch when the resolved episode is not in the db', async () => {
+    const { parsed, matched } = recoveryScenario(55503);
+    vi.mocked(findEpisodeByTvdbId).mockResolvedValue({
+      episodeTmdbId: 99999, showTmdbId: 12345, seasonNumber: 1, episodeNumber: 1,
+    });
+
+    const report = await runImport(parsed, matched);
+    expect(report.recoveredByEpisodeId).toBe(0);
+    expect(report.episodeMismatches).toEqual([{ show: 'Show A', season: 9, episode: 9, count: 1 }]);
+  });
+
+  it('never aborts on a TmdbError: keeps the mismatch, records a warning, run continues', async () => {
+    const { parsed, matched } = recoveryScenario(55504);
+    // add a normally-matching episode after the one that triggers the error
+    parsed.episodeWatches.push(
+      { tvdbSeriesId: 100, seriesName: 'Show A', season: 1, episode: 1, watchedAt: '2020-01-01 00:00:00', isRewatch: false, tvdbEpisodeId: null },
+    );
+    vi.mocked(findEpisodeByTvdbId).mockRejectedValue(new TmdbError('TMDB down', 500));
+
+    const report = await runImport(parsed, matched);
+    const db = getDb();
+
+    expect(report.recoveredByEpisodeId).toBe(0);
+    expect(report.episodeMismatches).toEqual([{ show: 'Show A', season: 9, episode: 9, count: 1 }]);
+    expect(report.errors.some(e => /55504/.test(e))).toBe(true);
+    // the following normal episode still imported
+    expect(db.select().from(watches).where(eq(watches.episodeId, 10001)).all()).toHaveLength(1);
+  });
+
+  it('is idempotent: a re-run skips the recovered watch as a duplicate', async () => {
+    const { parsed, matched } = recoveryScenario(55501);
+    vi.mocked(findEpisodeByTvdbId).mockResolvedValue({
+      episodeTmdbId: 10310, showTmdbId: 5001, seasonNumber: 3, episodeNumber: 10,
+    });
+
+    await runImport(parsed, matched);
+    const db = getDb();
+    const before = db.select().from(watches).all().length;
+
+    const second = await runImport(parsed, matched);
+    expect(db.select().from(watches).all().length).toBe(before);
+    expect(second.recoveredByEpisodeId).toBe(0);
+    expect(second.skippedDuplicates).toBe(1);
+  });
+
+  it('assigns increasing rewatchIndex to duplicate ep_id rewatch rows', async () => {
+    const { parsed, matched } = recoveryScenario(55501);
+    parsed.episodeWatches.push(
+      { tvdbSeriesId: 100, seriesName: 'Show A', season: 9, episode: 9, watchedAt: '2021-03-01 00:00:00', isRewatch: true, tvdbEpisodeId: 55501 },
+    );
+    vi.mocked(findEpisodeByTvdbId).mockResolvedValue({
+      episodeTmdbId: 10310, showTmdbId: 5001, seasonNumber: 3, episodeNumber: 10,
+    });
+
+    const report = await runImport(parsed, matched);
+    const db = getDb();
+
+    expect(report.recoveredByEpisodeId).toBe(2);
+    const rows = db.select().from(watches).where(eq(watches.episodeId, 10310)).all();
+    expect(rows.map(r => r.rewatchIndex).sort()).toEqual([0, 1]);
   });
 });

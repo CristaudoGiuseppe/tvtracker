@@ -2,6 +2,7 @@ import { eq, and } from 'drizzle-orm';
 import { getDb } from '../../db';
 import { episodes, watches } from '../../db/schema';
 import { addShow, addMovie, setMovieState, type LibStatus } from '../library';
+import { findEpisodeByTvdbId, TmdbError } from '../tmdb';
 import type { ParsedExport, ShowFollow } from './parse';
 import type { MatchedExport } from './match';
 
@@ -27,6 +28,9 @@ export type EpisodeMismatch = { show: string; season: number; episode: number; c
 export type ImportReport = {
   imported: { shows: number; episodes: number; movies: number; watchlist: number; follows: number };
   skippedDuplicates: number;
+  /** Episode watches whose (season,episode) numbering mismatched TMDB but were
+   * recovered via the export's tvdb ep_id (also included in imported.episodes). */
+  recoveredByEpisodeId: number;
   errors: string[];
   episodeMismatches: EpisodeMismatch[];
   unmatched: { shows: string[]; movies: string[] };
@@ -89,12 +93,44 @@ export function dryRun(parsed: ParsedExport, matched: MatchedExport): ImportPrev
 
 // --- real import -----------------------------------------------------------
 
-function importShowEpisodes(
+/** Inserts one episode watch with per-episode rewatch indexing, skipping exact
+ * (episode, watchedAt) duplicates. Returns true when a new row was inserted. */
+function insertEpisodeWatch(
+  db: ReturnType<typeof getDb>,
+  episodeId: number,
+  showId: number,
+  watchedAt: string,
+  nextIndex: Map<number, number>,
+  report: ImportReport,
+): boolean {
+  if (!nextIndex.has(episodeId)) {
+    const count = db.select().from(watches).where(and(eq(watches.kind, 'episode'), eq(watches.episodeId, episodeId))).all().length;
+    nextIndex.set(episodeId, count);
+  }
+
+  const dup = db
+    .select()
+    .from(watches)
+    .where(and(eq(watches.kind, 'episode'), eq(watches.episodeId, episodeId), eq(watches.watchedAt, watchedAt)))
+    .get();
+  if (dup) {
+    report.skippedDuplicates++;
+    return false;
+  }
+
+  const idx = nextIndex.get(episodeId)!;
+  db.insert(watches).values({ kind: 'episode', episodeId, showId, watchedAt, rewatchIndex: idx }).run();
+  nextIndex.set(episodeId, idx + 1);
+  report.imported.episodes++;
+  return true;
+}
+
+async function importShowEpisodes(
   tmdbId: number,
   seriesName: string,
   showWatches: ParsedExport['episodeWatches'],
   report: ImportReport,
-): void {
+): Promise<void> {
   const db = getDb();
 
   // (season-episode) -> tmdb episode id for this show
@@ -105,35 +141,44 @@ function importShowEpisodes(
   const mismatches = new Map<string, EpisodeMismatch>();
   const nextIndex = new Map<number, number>();
 
+  const recordMismatch = (w: ParsedExport['episodeWatches'][number]) => {
+    const key = `${w.season}-${w.episode}`;
+    const existing = mismatches.get(key);
+    if (existing) existing.count++;
+    else mismatches.set(key, { show: seriesName, season: w.season, episode: w.episode, count: 1 });
+  };
+
   for (const w of showWatches) {
     const epId = byKey.get(`${w.season}-${w.episode}`);
-    if (epId === undefined) {
-      const key = `${w.season}-${w.episode}`;
-      const existing = mismatches.get(key);
-      if (existing) existing.count++;
-      else mismatches.set(key, { show: seriesName, season: w.season, episode: w.episode, count: 1 });
+    if (epId !== undefined) {
+      insertEpisodeWatch(db, epId, tmdbId, w.watchedAt, nextIndex, report);
       continue;
     }
 
-    if (!nextIndex.has(epId)) {
-      const count = db.select().from(watches).where(and(eq(watches.kind, 'episode'), eq(watches.episodeId, epId))).all().length;
-      nextIndex.set(epId, count);
+    // No (season,episode) match. Try the exact ep_id fallback: TVDB episode id
+    // -> TMDB episode via /find. Only recover when that episode is already
+    // cached (belongs to an imported show); use the episode's own show id.
+    if (w.tvdbEpisodeId !== null) {
+      let found: Awaited<ReturnType<typeof findEpisodeByTvdbId>> = null;
+      try {
+        found = await findEpisodeByTvdbId(w.tvdbEpisodeId);
+      } catch (err) {
+        if (!(err instanceof TmdbError)) throw err;
+        report.errors.push(`recovery: TMDB find failed for ep_id ${w.tvdbEpisodeId} (${seriesName}): ${err.message}`);
+        recordMismatch(w);
+        continue;
+      }
+      if (found) {
+        const epRow = db.select().from(episodes).where(eq(episodes.tmdbId, found.episodeTmdbId)).get();
+        if (epRow) {
+          const inserted = insertEpisodeWatch(db, epRow.tmdbId, epRow.showId, w.watchedAt, nextIndex, report);
+          if (inserted) report.recoveredByEpisodeId++;
+          continue;
+        }
+      }
     }
 
-    const dup = db
-      .select()
-      .from(watches)
-      .where(and(eq(watches.kind, 'episode'), eq(watches.episodeId, epId), eq(watches.watchedAt, w.watchedAt)))
-      .get();
-    if (dup) {
-      report.skippedDuplicates++;
-      continue;
-    }
-
-    const idx = nextIndex.get(epId)!;
-    db.insert(watches).values({ kind: 'episode', episodeId: epId, showId: tmdbId, watchedAt: w.watchedAt, rewatchIndex: idx }).run();
-    nextIndex.set(epId, idx + 1);
-    report.imported.episodes++;
+    recordMismatch(w);
   }
 
   for (const m of mismatches.values()) report.episodeMismatches.push(m);
@@ -147,6 +192,7 @@ export async function runImport(
   const report: ImportReport = {
     imported: { shows: 0, episodes: 0, movies: 0, watchlist: 0, follows: 0 },
     skippedDuplicates: 0,
+    recoveredByEpisodeId: 0,
     errors: [],
     episodeMismatches: [],
     unmatched: { shows: matched.unmatchedShows, movies: matched.unmatchedMovies },
@@ -174,7 +220,7 @@ export async function runImport(
       if (follow) report.imported.follows++;
       onProgress?.(`Imported show ${show.seriesName}`);
       const showWatches = watchesByTvdb.get(show.tvdbSeriesId) ?? [];
-      importShowEpisodes(show.tmdbId, show.seriesName, showWatches, report);
+      await importShowEpisodes(show.tmdbId, show.seriesName, showWatches, report);
     } catch (err) {
       report.errors.push(`${show.seriesName}: ${err instanceof Error ? err.message : String(err)}`);
     }

@@ -10,6 +10,10 @@ export type EpisodeWatch = {
   episode: number;
   watchedAt: string;
   isRewatch: boolean;
+  /** TVDB episode id from the export's `ep_id` column; null when the column is
+   * absent (some export variants) or empty. Used to recover episodes whose
+   * (season,episode) numbering disagrees between TVDB and TMDB. */
+  tvdbEpisodeId: number | null;
 };
 
 export type ShowFollow = {
@@ -127,6 +131,7 @@ function parseV2(rows: Row[], out: ParsedExport): void {
         episode,
         watchedAt: ((row.created_at ?? '').trim() || (row.updated_at ?? '').trim()),
         isRewatch: key.startsWith('rewatch'),
+        tvdbEpisodeId: toInt(row.ep_id),
       });
       continue;
     }

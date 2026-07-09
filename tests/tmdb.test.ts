@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import {
   tmdbGet,
   findByTvdbId,
+  findEpisodeByTvdbId,
   getShowFull,
   getMovie,
   searchShows,
@@ -107,6 +108,39 @@ describe('tmdb client', () => {
     const result = await findByTvdbId(999999);
 
     expect(result).toEqual({ tvId: null });
+  });
+
+  it('findEpisodeByTvdbId resolves the first tv_episode_results entry', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockResponse({
+        tv_episode_results: [
+          { id: 1149719, season_number: 5, episode_number: 133, show_id: 37854 },
+        ],
+        tv_results: [],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await findEpisodeByTvdbId(362051);
+
+    expect(result).toEqual({
+      episodeTmdbId: 1149719,
+      showTmdbId: 37854,
+      seasonNumber: 5,
+      episodeNumber: 133,
+    });
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/find/362051');
+    expect(String(url)).toContain('external_source=tvdb_id');
+  });
+
+  it('findEpisodeByTvdbId returns null when there are no episode matches', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse({ tv_episode_results: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await findEpisodeByTvdbId(999999);
+
+    expect(result).toBeNull();
   });
 
   it('(e) getShowFull merges each season episodes array into the season object', async () => {
