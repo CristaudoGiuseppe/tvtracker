@@ -55,7 +55,7 @@ export function Nav() {
                 aria-label={label}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "group relative flex h-11 min-w-11 items-center justify-center gap-2 rounded-full px-0 text-sm font-semibold transition-[background-color,color,box-shadow] duration-300 ease-quint md:px-4",
+                  "group relative flex h-11 min-w-11 items-center justify-center gap-2 rounded-full px-0 text-sm font-semibold transition-[background-color,color,box-shadow] duration-300 ease-quint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 md:px-4",
                   active
                     ? "bg-accent text-accent-ink shadow-[0_4px_16px_-4px_color-mix(in_oklab,var(--color-accent)_65%,transparent)]"
                     : "text-muted hover:bg-[color-mix(in_oklab,var(--color-ink)_8%,transparent)] hover:text-ink",

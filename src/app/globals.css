@@ -142,7 +142,10 @@
 
 @layer components {
   /* The liquid-glass capsule. Fill + blur + soft drop shadow live here;
-     the specular top highlight is a masked gradient ring in ::before. */
+     the specular top highlight is a masked gradient ring in ::before.
+     The base fill's opacity is deliberately high enough to keep the bar
+     legible where backdrop-filter is unsupported — it doubles as the
+     no-blur fallback, so don't thin it out in a refactor. */
   .glass-nav {
     position: relative;
     isolation: isolate;
