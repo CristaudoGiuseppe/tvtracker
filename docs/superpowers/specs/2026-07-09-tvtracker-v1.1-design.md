@@ -49,3 +49,7 @@ Toolbar above the grid:
 - Lib: `to_start` split, progress exposure in watch-next list, provider JSON parse/store, sync NULL-backfill (incl. ended shows), settings view round-trip — unit tests.
 - Routes: providers fields flow through existing thin routes; new/changed routes get api tests.
 - UI: build + live verification (curl/browser) per established practice; nav change is visual — verified in the running app at both breakpoints.
+
+## 6. Explore — add-with-intent (added 2026-07-09, user request)
+
+Adding a SHOW from Esplora (search results and trending rails) offers two actions instead of one: "Inizio a guardarla" (status `watching`, today's behavior) and "Da vedere più tardi" (status `for_later`) — small split-button or long-press menu on the existing add control; default tap = watching. Movies keep going straight to the watchlist. The show-detail "Aggiungi alla libreria" hero button gets the same two options. Implemented with Task 18 (it already touches the library toolbar/filters surface).

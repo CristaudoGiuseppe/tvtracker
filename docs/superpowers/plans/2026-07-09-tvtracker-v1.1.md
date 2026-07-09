@@ -45,6 +45,7 @@
 
 **Files:** Modify `src/app/shows/page.tsx`, `src/components/show-grid.tsx` (+ new `src/components/library-toolbar.tsx`), `src/lib/watch-next.ts` (grouped items expose genres + provider ids + lastWatchedAt + progress% for client-side filtering), settings API reuse.
 
+- [ ] Explore add-with-intent (spec §6): show-add offers "Inizio a guardarla" / "Da vedere più tardi" (status for_later) in Esplora cards AND show-detail hero; movies unchanged. Extend existing api tests for the status param path.
 - [ ] Toolbar (client): filter chips/selects — Piattaforma (options = distinct flatrate providers across library, with logos), Genere (distinct genres), Stato (6 groups), Solo preferite; sort select — Nome A→Z (default), Attività recente, Progresso. Filtering/sorting client-side over server-passed data (single-user scale).
 - [ ] Groups stay; items sorted per sort choice inside groups (default alphabetical, it-IT collation); Stato filter hides other groups; empty groups hidden.
 - [ ] Persistent view: toolbar state auto-saved (debounced 500ms) to settings key `view.myshows` via POST /api/settings (extend the route to accept arbitrary whitelisted keys — whitelist `view.myshows`, `watch.region`, `tmdb.language`), restored server-side on page load; "Reimposta" clears. TDD the settings whitelist + round-trip.
