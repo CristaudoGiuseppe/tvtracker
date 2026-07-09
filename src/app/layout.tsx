@@ -25,12 +25,13 @@ export default function RootLayout({
       <body className="antialiased">
         <Nav />
         <Toaster />
-        {/* Offset for the fixed sidebar on desktop; clear the bottom bar on mobile */}
-        <div className="flex min-h-screen flex-col md:pl-[248px]">
-          <main className="flex-1 px-5 pb-28 pt-6 sm:px-8 md:px-10 md:pb-10 md:pt-10">
+        {/* Full-width centred content; bottom padding clears the floating nav
+            (~68px capsule + margin + safe-area) on every breakpoint. */}
+        <div className="flex min-h-screen flex-col pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
+          <main className="flex-1 px-5 pt-6 sm:px-8 md:px-10 md:pt-10">
             <div className="mx-auto w-full max-w-6xl">{children}</div>
           </main>
-          <footer className="mb-20 border-t border-line px-5 py-6 sm:px-8 md:mb-0 md:px-10">
+          <footer className="border-t border-line px-5 py-6 sm:px-8 md:px-10">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 text-xs text-faint sm:flex-row sm:items-center sm:justify-between">
               <p className="max-w-xl leading-relaxed">
                 Questo prodotto usa l&apos;API TMDB ma non è approvato o

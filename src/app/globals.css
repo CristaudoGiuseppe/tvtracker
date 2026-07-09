@@ -42,6 +42,17 @@
     0 12px 32px -16px rgba(0, 0, 0, 0.7);
   --shadow-pop: 0 16px 48px -12px rgba(0, 0, 0, 0.8);
 
+  /* Liquid-glass floating nav — translucent capsule over the dark canvas.
+     Fill is a top-lit vertical gradient; blur+saturate lets colour bleed
+     through; the ring (::before) carries the specular top highlight. */
+  --glass-blur: 22px;
+  --glass-saturate: 190%;
+  --glass-fill-top: color-mix(in oklab, var(--color-surface-2) 74%, transparent);
+  --glass-fill-bottom: color-mix(in oklab, var(--color-canvas) 82%, transparent);
+  --glass-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.8),
+    0 4px 14px -6px rgba(0, 0, 0, 0.55);
+  --glass-highlight: color-mix(in oklab, #fff 26%, transparent);
+
   /* Motion — exponential ease-out for natural deceleration */
   --ease-quint: cubic-bezier(0.22, 1, 0.36, 1);
 
@@ -126,6 +137,47 @@
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-line-strong) transparent;
+  }
+}
+
+@layer components {
+  /* The liquid-glass capsule. Fill + blur + soft drop shadow live here;
+     the specular top highlight is a masked gradient ring in ::before. */
+  .glass-nav {
+    position: relative;
+    isolation: isolate;
+    background: linear-gradient(
+      to bottom,
+      var(--glass-fill-top),
+      var(--glass-fill-bottom)
+    );
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur))
+      saturate(var(--glass-saturate));
+    box-shadow: var(--glass-shadow);
+  }
+
+  /* Hairline specular ring — brightest along the top edge, fading down the
+     sides. Rendered as a 1px gradient border via mask-composite. */
+  .glass-nav::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      to bottom,
+      var(--glass-highlight),
+      color-mix(in oklab, #fff 6%, transparent) 30%,
+      transparent 65%
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
   }
 }
 
