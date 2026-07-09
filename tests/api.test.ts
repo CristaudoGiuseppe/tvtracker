@@ -524,6 +524,36 @@ describe('POST /api/import/match', () => {
     const res = await postImportMatch(jsonRequest('http://x/api/import/match', 'POST', { kind: 'person', tmdbId: 1 }));
     expect(res.status).toBe(400);
   });
+
+  // JSON.stringify(NaN) collapses to `null`, which the `typeof === 'number'`
+  // check already rejected — so a NaN synthesized client-side could never
+  // actually reach here as NaN over the wire. An oversized exponent, on the
+  // other hand, is valid JSON syntax that JSON.parse resolves to a real
+  // non-finite `number` (Infinity) — a genuine `typeof === 'number'`
+  // pass-through that `Number.isFinite` must reject.
+  it('400s when tvdbSeriesId is a non-finite number (oversized exponent)', async () => {
+    const res = await postImportMatch(
+      new Request('http://x/api/import/match', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"kind":"show","tvdbSeriesId":1e400,"tmdbId":1}',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(getDb().select().from(settingsTable).all()).toEqual([]);
+  });
+
+  it('400s when tmdbId is a non-finite number (oversized exponent)', async () => {
+    const res = await postImportMatch(
+      new Request('http://x/api/import/match', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{"kind":"show","tvdbSeriesId":1,"tmdbId":1e400}',
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(getDb().select().from(settingsTable).all()).toEqual([]);
+  });
 });
 
 // --- export (real db) ------------------------------------------------------

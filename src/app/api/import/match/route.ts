@@ -7,13 +7,13 @@ export async function POST(request: Request): Promise<Response> {
     const body = await request.json().catch(() => ({}));
     const { kind, tmdbId } = body ?? {};
 
-    if (typeof tmdbId !== 'number') {
-      return Response.json({ error: 'tmdbId must be a number' }, { status: 400 });
+    if (!Number.isFinite(tmdbId)) {
+      return Response.json({ error: 'tmdbId must be a finite number' }, { status: 400 });
     }
 
     if (kind === 'show') {
-      if (typeof body?.tvdbSeriesId !== 'number') {
-        return Response.json({ error: 'tvdbSeriesId must be a number' }, { status: 400 });
+      if (!Number.isFinite(body?.tvdbSeriesId)) {
+        return Response.json({ error: 'tvdbSeriesId must be a finite number' }, { status: 400 });
       }
       resolveManualMatch(body.tvdbSeriesId, tmdbId);
       return Response.json({ ok: true }, { status: 200 });

@@ -313,6 +313,11 @@ export function ImportWizard() {
   }
 
   async function confirmImport() {
+    // Only called from the preview panel, so the preview data is always
+    // available here — captured before switching to "importing" so a failed
+    // PUT can restore it without forcing a re-analysis of the whole export.
+    if (phase.name !== "preview") return;
+    const { preview, warnings } = phase;
     setError(null);
     setPhase({ name: "importing" });
     try {
@@ -321,15 +326,33 @@ export function ImportWizard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: "import-session", confirm: true }),
       });
-      if (!res.ok) throw new Error(await errorOf(res));
+      if (!res.ok) {
+        const message = await errorOf(res);
+        if (res.status === 400) {
+          // The server only 400s here when the session is actually gone
+          // (e.g. never uploaded, or already consumed) — a re-upload is the
+          // only way forward.
+          setError(message);
+          setPhase({ name: "idle" });
+          return;
+        }
+        // Transient failure (network blip, 5xx): the server only deletes the
+        // session on a *successful* import, so it's still there. Go back to
+        // the preview with the data we already have and let the user retry
+        // "Importa" directly instead of re-running the multi-minute analysis.
+        setError(`${message} La sessione è ancora valida: puoi riprovare a importare senza rianalizzare il file.`);
+        setPhase({ name: "preview", preview, warnings });
+        return;
+      }
       const report = (await res.json()) as Report;
       setPhase({ name: "report", report });
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      // The session may still exist server-side; going back to idle would
-      // force a re-upload, which is safe (re-POST recreates the session).
-      setPhase({ name: "idle" });
+      // fetch itself rejected (e.g. offline) — same reasoning: the server
+      // session is untouched, so keep the preview for a direct retry.
+      const message = err instanceof Error ? err.message : String(err);
+      setError(`${message} La sessione è ancora valida: puoi riprovare a importare senza rianalizzare il file.`);
+      setPhase({ name: "preview", preview, warnings });
     }
   }
 
@@ -375,6 +398,11 @@ export function ImportWizard() {
             {file && phase.name === "idle" && (
               <Button size="sm" variant="secondary" onClick={() => void upload(file)}>
                 Riprova con {file.name}
+              </Button>
+            )}
+            {phase.name === "preview" && (
+              <Button size="sm" variant="secondary" onClick={() => void confirmImport()}>
+                Riprova a importare
               </Button>
             )}
           </div>
@@ -490,12 +518,10 @@ function PreviewPanel({
   onConfirm: () => void;
   onSaveMatch: (key: string, body: Record<string, unknown>) => Promise<void>;
 }) {
-  // Fall back to the plain string lists if the structured items are missing
-  // (they only lack the ids needed to save an override, never the names).
-  const showItems = (
-    preview.unmatchedShowItems ??
-    preview.unmatchedShows.map((name) => ({ tvdbSeriesId: NaN, seriesName: name }))
-  ).map((s) => ({
+  // The server always sends unmatchedShowItems; render nothing extra if it's
+  // ever absent rather than synthesizing a fake tvdbSeriesId (NaN) that would
+  // be unusable for saving an override.
+  const showItems = (preview.unmatchedShowItems ?? []).map((s) => ({
     key: `show-${s.tvdbSeriesId}-${s.seriesName}`,
     label: s.seriesName,
     query: s.seriesName,
