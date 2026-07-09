@@ -10,11 +10,12 @@ Runs entirely on your own machine in Docker. Your entire library lives in one SQ
 ## Features
 
 - **Watch Next** — one card per in-progress show with its next unwatched episode and a one-tap check-in that advances in place
-- **Show & movie detail** — season-by-season episode checklists, bulk "mark season/series watched", rewatch tracking, 1–10 ratings, favorites
-- **My Shows** — library grouped TV Time-style: Watching · Up to date · For later · Finished · Stopped
+- **Show & movie detail** — season-by-season episode checklists, bulk "mark season/series watched", rewatch tracking, 1–10 ratings, favorites, a season chip grid for at-a-glance progress across every season
+- **My Shows** — library grouped TV Time-style: Watching · Da iniziare · Up to date · For later · Finished · Stopped, with filters/sort and a persistent saved view
 - **Movies** — watchlist and watched tabs
 - **Upcoming** — air-date calendar for your followed shows, with season-premiere badges (metadata auto-refreshes daily)
-- **Explore** — TMDB trending rails + debounced full search, add anything in one tap
+- **Explore** — TMDB trending rails + debounced full search, add anything in one tap — including add-with-intent (start watching now, or save for later) straight from Explore or the detail page
+- **Dove guardarla** — watch providers with platform logos (JustWatch data via TMDB)
 - **Stats** — total time watched, top shows, top genres, 24-month activity chart, streaks
 - **TV Time import** — upload the GDPR ZIP, preview before committing, manual search-and-match for anything TMDB can't resolve automatically, idempotent re-runs (never duplicates), and nothing is ever silently dropped
 - **Data freedom** — one-click JSON export of everything; the SQLite file is yours
@@ -96,7 +97,7 @@ src/
 └── components/    # design system (ui.tsx) + screen components
 ```
 
-- **Stack:** Next.js 15 · TypeScript · Tailwind CSS 4 · Drizzle ORM + better-sqlite3 · Vitest (157 tests)
+- **Stack:** Next.js 15 · TypeScript · Tailwind CSS 4 · Drizzle ORM + better-sqlite3 · Vitest (195 tests)
 - **Design:** dark cinematic theme, posters-as-interface, optimistic UI with revert-on-failure
 - **Single user, no auth** — it's yours, on localhost
 

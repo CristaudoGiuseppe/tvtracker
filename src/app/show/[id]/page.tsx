@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import {
   getShowDetail,
   libraryGroupFor,
-  type DetailSeason,
   type LibraryGroup,
 } from "@/lib/watch-next";
 import { getShowFull, TmdbError } from "@/lib/tmdb";

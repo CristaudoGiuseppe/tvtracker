@@ -9,7 +9,7 @@ Single-user, self-hosted TV/movie tracker (TV Time replacement) with a lossless 
 ## Commands
 
 ```bash
-npx vitest run                 # full test suite (157 tests) — must stay green
+npx vitest run                 # full test suite (195 tests) — must stay green
 npx vitest run tests/foo.test.ts   # focused run while iterating
 npx tsc --noEmit               # typecheck — must stay clean
 npx next build                 # production build — must pass before calling UI work done
@@ -25,7 +25,7 @@ Secrets live in `.env` (git-ignored): `TMDB_API_KEY`, `TMDB_READ_TOKEN`, optiona
 
 | Module | Contract |
 |---|---|
-| `src/db/schema.ts` | Single source of schema truth. After ANY change: `npx drizzle-kit generate`, then mirror the SQL into `src/db/migrations.ts` as `IF NOT EXISTS` statements (executed idempotently on open). |
+| `src/db/schema.ts` | Single source of schema truth. After ANY change: `npx drizzle-kit generate`, then mirror the SQL into `src/db/migrations.ts` as `IF NOT EXISTS` statements (executed idempotently on open). Additive columns (SQLite has no `ADD COLUMN IF NOT EXISTS`) go in `alterStatements` instead and are executed with a duplicate-column guard in `db/index.ts`. |
 | `src/db/index.ts` | `getDb()` singleton; `DATA_DIR=':memory:'` → in-memory (tests use `resetDbForTests()` in `beforeEach`). |
 | `src/lib/tmdb.ts` | The ONLY module that performs TMDB HTTP. Throttle ≤40 req/10s, 10-min URL cache, retry w/ backoff, `TmdbError` on exhaustion, per-call language from settings (`it-IT` fallback). Tests mock `fetch`; call `resetTmdbForTests()` in `beforeEach`. |
 | `src/lib/library.ts` | The ONLY module that mutates user data. `nowUtc()` is the single timestamp producer (`YYYY-MM-DD HH:MM:SS` UTC). `addShow`/`addMovie` are idempotent-INSERTs: they never change existing rows — state transitions go through `setShowStatus`/`setMovieState`. |
@@ -37,7 +37,7 @@ Secrets live in `.env` (git-ignored): `TMDB_API_KEY`, `TMDB_READ_TOKEN`, optiona
 ## Domain semantics that bite
 
 - `watches` table: unique on `(kind, episodeId, movieId, rewatchIndex)`; a rewatch = new row with incremented `rewatchIndex`. Import idempotency keys on `(kind, episodeId, watchedAt)`.
-- `library_shows.status` stored values: `watching | finished | stopped | for_later`. The DISPLAY adds `up_to_date` (computed split of `watching`) — mapping lives in the screens, not the DB.
+- `library_shows.status` stored values: `watching | finished | stopped | for_later`. The DISPLAY splits `watching` into `to_start` and `up_to_date` (computed) — mapping lives in the screens, not the DB.
 - Favorite toggle API: send `{favorite: true}` to toggle; `favorite: false` is a no-op by design.
 - Timestamps are plain-text UTC strings compared lexically — never round-trip them through `Date` for bucketing (string-slice instead).
 - `.gitignore` uses anchored `/import/` deliberately — a bare `import/` pattern once swallowed `src/app/api/import/`. Watch for the same trap with `data/`.

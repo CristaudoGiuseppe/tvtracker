@@ -33,10 +33,6 @@ export function getLanguage(): TmdbLanguage {
   }
 }
 
-export function setLanguage(language: TmdbLanguage): void {
-  setSetting(LANGUAGE_KEY, language);
-}
-
 /** Raw value for a settings key, or null when unset (defensive: never throws). */
 export function getSetting(key: string): string | null {
   try {

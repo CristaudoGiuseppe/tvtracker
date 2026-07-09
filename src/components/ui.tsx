@@ -197,7 +197,7 @@ const STATUS = {
   watching: { label: "In visione", color: "var(--color-watching)" },
   to_start: { label: "Da iniziare", color: "var(--color-tostart)" },
   caught_up: { label: "In pari", color: "var(--color-caughtup)" },
-  to_watch: { label: "Da vedere", color: "var(--color-towatch)" },
+  to_watch: { label: "Da vedere più tardi", color: "var(--color-towatch)" },
   finished: { label: "Finite", color: "var(--color-finished)" },
   dropped: { label: "Abbandonate", color: "var(--color-dropped)" },
 } as const;
