@@ -53,3 +53,9 @@ Toolbar above the grid:
 ## 6. Explore — add-with-intent (added 2026-07-09, user request)
 
 Adding a SHOW from Esplora (search results and trending rails) offers two actions instead of one: "Inizio a guardarla" (status `watching`, today's behavior) and "Da vedere più tardi" (status `for_later`) — small split-button or long-press menu on the existing add control; default tap = watching. Movies keep going straight to the watchlist. The show-detail "Aggiungi alla libreria" hero button gets the same two options. Implemented with Task 18 (it already touches the library toolbar/filters surface).
+
+## 7. Show detail — season picker redesign (added 2026-07-09, user request)
+
+Problem: the horizontal season-tab strip is unusable for long-running shows (One Piece: 20+ seasons require blind right-scrolling).
+
+Replace the scrolling tab strip with a **wrapping chip grid**: all seasons visible at once as compact chips (2-3 rows for big shows), each chip showing its number and watch state at a glance — completed (check/full ring), partially watched (progress ring or fill %), unwatched (muted). Tap a chip → that season's episode list renders below (same behavior as today's tabs). Specials (season 0) chip last, visually de-emphasized. Keyboard/AT semantics preserved (tablist or listbox — implementer's call with frontend-design guidance). The selected chip is clearly distinct from watch-state styling.

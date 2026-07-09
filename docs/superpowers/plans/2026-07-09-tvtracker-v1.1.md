@@ -56,3 +56,11 @@
 - [ ] Final whole-branch code review (superpowers:requesting-code-review) covering v1.0 accumulated Minors (ledger) + v1.1 diff; fix wave for Critical/Important.
 - [ ] Rebuild container (`docker compose build && up -d`) AFTER confirming no import is running; verify data intact (docker exec count), click through all screens with real data.
 - [ ] Tag `v1.1.0`, push branch + main + tags to GitHub.
+
+### Task 20: Season picker redesign  *(frontend-design skill first)*
+
+**Files:** Modify `src/components/season-tabs.tsx` (rename/replace with season chip grid), `src/app/show/[id]/page.tsx` (pass per-season watched/aired counts — compute from existing data, no schema change), tests only if pure logic is extracted.
+
+- [ ] Per-season progress data: aired + watched counts per season (derive in the page's server component from episodes+watches already loaded; exclude nothing — season 0 shown but last and de-emphasized).
+- [ ] Wrapping chip grid per spec §7: all seasons visible, state-at-a-glance (done/partial/unwatched), selected state distinct, works from 1 to 25+ seasons at 375px and desktop.
+- [ ] Verify live with a seeded long show; suite/tsc/build green. Commit `feat: season chip grid`.
