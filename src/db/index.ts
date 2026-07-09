@@ -3,7 +3,7 @@ import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import * as schema from './schema';
-import { statements } from './migrations';
+import { statements, alterStatements } from './migrations';
 
 let instance: BetterSQLite3Database<typeof schema> | null = null;
 let sqliteHandle: Database.Database | null = null;
@@ -29,4 +29,15 @@ function migrate(sqlite: Database.Database): void {
   // Run `npx drizzle-kit generate` after any schema.ts change and re-export
   // the statements from src/db/migrations.ts (string[] of CREATE ... IF NOT EXISTS).
   for (const stmt of statements) sqlite.exec(stmt);
+  // Additive column migrations: SQLite lacks `ADD COLUMN IF NOT EXISTS`, so
+  // re-running throws "duplicate column name". Swallow only that error to stay
+  // idempotent; anything else is a real failure and must propagate.
+  for (const stmt of alterStatements) {
+    try {
+      sqlite.exec(stmt);
+    } catch (err) {
+      if (err instanceof Error && /duplicate column name/i.test(err.message)) continue;
+      throw err;
+    }
+  }
 }

@@ -1,15 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getDb, resetDbForTests } from '../src/db';
-import { shows, libraryShows, settings } from '../src/db/schema';
+import { shows, movies, libraryShows, libraryMovies, settings } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 import type { TmdbShowFull } from '../src/lib/tmdb';
 
 vi.mock('../src/lib/tmdb', () => ({
   getShowFull: vi.fn(),
+  getWatchProviders: vi.fn(),
 }));
 
-import { getShowFull } from '../src/lib/tmdb';
+import { getShowFull, getWatchProviders } from '../src/lib/tmdb';
 import { refreshStaleShows } from '../src/lib/sync';
+
+const providers = { region: 'IT', flatrate: [{ id: 8, name: 'Netflix', logoPath: '/n.jpg' }], rent: [], buy: [] };
 
 function iso(offsetMs: number): string {
   return new Date(Date.now() + offsetMs).toISOString().slice(0, 19).replace('T', ' ');
@@ -41,9 +44,16 @@ function seedShow(id: number, status: string, lastSyncedAt: string | null): void
   db.insert(libraryShows).values({ showId: id, status: 'watching', addedAt: '2020-01-01 00:00:00' }).run();
 }
 
+function seedMovie(id: number): void {
+  const db = getDb();
+  db.insert(movies).values({ tmdbId: id, title: `Movie ${id}` }).run();
+  db.insert(libraryMovies).values({ movieId: id, state: 'watchlist', addedAt: '2020-01-01 00:00:00' }).run();
+}
+
 beforeEach(() => {
   resetDbForTests();
   vi.mocked(getShowFull).mockReset();
+  vi.mocked(getWatchProviders).mockReset().mockResolvedValue(providers);
 });
 
 describe('refreshStaleShows', () => {
@@ -125,5 +135,31 @@ describe('refreshStaleShows', () => {
 
     expect(refreshed).toBe(1);
     expect(vi.mocked(getShowFull)).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('providers backfill', () => {
+  it('backfills NULL providers for an Ended show and a movie (bypasses the Ended skip)', async () => {
+    seedShow(20, 'Ended', iso(-48 * HOUR)); // Ended → excluded from metadata refresh
+    seedMovie(30);
+
+    await refreshStaleShows();
+
+    // getShowFull is never called for the Ended show (metadata skip holds)...
+    expect(vi.mocked(getShowFull)).not.toHaveBeenCalled();
+    // ...but its providers column is backfilled anyway, and so is the movie's.
+    expect(JSON.parse(getDb().select().from(shows).where(eq(shows.tmdbId, 20)).get()!.watchProviders!)).toEqual(providers);
+    expect(JSON.parse(getDb().select().from(movies).where(eq(movies.tmdbId, 30)).get()!.watchProviders!)).toEqual(providers);
+    expect(vi.mocked(getWatchProviders)).toHaveBeenCalledWith('tv', 20);
+    expect(vi.mocked(getWatchProviders)).toHaveBeenCalledWith('movie', 30);
+  });
+
+  it('does not re-fetch providers for titles that already have data', async () => {
+    seedShow(21, 'Ended', iso(-48 * HOUR));
+    getDb().update(shows).set({ watchProviders: JSON.stringify(providers) }).where(eq(shows.tmdbId, 21)).run();
+
+    await refreshStaleShows();
+
+    expect(vi.mocked(getWatchProviders)).not.toHaveBeenCalled();
   });
 });

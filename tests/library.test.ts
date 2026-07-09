@@ -7,9 +7,10 @@ import type { TmdbShowFull, TmdbMovie } from '../src/lib/tmdb';
 vi.mock('../src/lib/tmdb', () => ({
   getShowFull: vi.fn(),
   getMovie: vi.fn(),
+  getWatchProviders: vi.fn(),
 }));
 
-import { getShowFull, getMovie } from '../src/lib/tmdb';
+import { getShowFull, getMovie, getWatchProviders } from '../src/lib/tmdb';
 import {
   addShow,
   upsertShowMetadata,
@@ -23,10 +24,19 @@ import {
   addMovie,
   setMovieState,
   checkInMovie,
+  refreshProviders,
   rate,
   nowUtc,
   type LibStatus,
 } from '../src/lib/library';
+
+const fixtureProviders = {
+  region: 'IT',
+  link: 'https://tmdb/watch',
+  flatrate: [{ id: 8, name: 'Netflix', logoPath: '/net.jpg' }],
+  rent: [],
+  buy: [],
+};
 
 const SHOW_ID = 5001;
 
@@ -90,6 +100,7 @@ describe('library', () => {
     resetDbForTests();
     vi.mocked(getShowFull).mockReset().mockResolvedValue(fixtureShow);
     vi.mocked(getMovie).mockReset().mockResolvedValue(fixtureMovie);
+    vi.mocked(getWatchProviders).mockReset().mockResolvedValue(fixtureProviders);
   });
 
   describe('nowUtc', () => {
@@ -141,6 +152,45 @@ describe('library', () => {
 
       const episodeRows = db.select().from(episodes).where(eq(episodes.showId, SHOW_ID)).all();
       expect(episodeRows).toHaveLength(4);
+    });
+
+    it('stores fetched watch providers as JSON on the show row', async () => {
+      await addShow(SHOW_ID);
+      const row = getDb().select().from(shows).where(eq(shows.tmdbId, SHOW_ID)).get();
+      expect(JSON.parse(row!.watchProviders!)).toEqual(fixtureProviders);
+    });
+
+    it('tolerates a providers fetch failure: adds the show with null providers', async () => {
+      vi.mocked(getWatchProviders).mockRejectedValueOnce(new Error('tmdb down'));
+      await addShow(SHOW_ID);
+      const row = getDb().select().from(shows).where(eq(shows.tmdbId, SHOW_ID)).get();
+      expect(row?.watchProviders).toBeNull();
+      expect(getDb().select().from(libraryShows).where(eq(libraryShows.showId, SHOW_ID)).get()).toBeTruthy();
+    });
+  });
+
+  describe('refreshProviders', () => {
+    it('populates providers and returns true; region-miss stores null and returns false', async () => {
+      await addShow(SHOW_ID);
+      getDb().update(shows).set({ watchProviders: null }).where(eq(shows.tmdbId, SHOW_ID)).run();
+
+      const ok = await refreshProviders('tv', SHOW_ID);
+      expect(ok).toBe(true);
+      expect(JSON.parse(getDb().select().from(shows).where(eq(shows.tmdbId, SHOW_ID)).get()!.watchProviders!)).toEqual(fixtureProviders);
+
+      vi.mocked(getWatchProviders).mockResolvedValueOnce(null);
+      const miss = await refreshProviders('tv', SHOW_ID);
+      expect(miss).toBe(false);
+      expect(getDb().select().from(shows).where(eq(shows.tmdbId, SHOW_ID)).get()!.watchProviders).toBeNull();
+    });
+
+    it('preserves existing providers when the fetch errors', async () => {
+      await addShow(SHOW_ID);
+      vi.mocked(getWatchProviders).mockRejectedValueOnce(new Error('tmdb down'));
+
+      const ok = await refreshProviders('tv', SHOW_ID);
+      expect(ok).toBe(false);
+      expect(getDb().select().from(shows).where(eq(shows.tmdbId, SHOW_ID)).get()!.watchProviders).not.toBeNull();
     });
   });
 
@@ -292,6 +342,7 @@ describe('library', () => {
       expect(db.select().from(movies).where(eq(movies.tmdbId, 6001)).get()?.title).toBe('Test Movie');
       expect(db.select().from(libraryMovies).where(eq(libraryMovies.movieId, 6001)).get()?.state).toBe('watchlist');
       expect(db.select().from(watches).where(eq(watches.movieId, 6001)).all()).toHaveLength(0);
+      expect(JSON.parse(db.select().from(movies).where(eq(movies.tmdbId, 6001)).get()!.watchProviders!)).toEqual(fixtureProviders);
     });
 
     it('addMovie with watched state also checks in a watch', async () => {

@@ -11,6 +11,7 @@ export const shows = sqliteTable('shows', {
   genres: text('genres'),                      // JSON string[]
   episodeRunTime: integer('episode_run_time'), // minutes, fallback 40
   lastSyncedAt: text('last_synced_at'),
+  watchProviders: text('watch_providers'),     // JSON ProvidersJson or null (see lib/tmdb.ts)
 });
 
 export const seasons = sqliteTable('seasons', {
@@ -44,6 +45,7 @@ export const movies = sqliteTable('movies', {
   runtime: integer('runtime'),                 // minutes
   releaseDate: text('release_date'),
   lastSyncedAt: text('last_synced_at'),
+  watchProviders: text('watch_providers'),     // JSON ProvidersJson or null (see lib/tmdb.ts)
 });
 
 export const libraryShows = sqliteTable('library_shows', {

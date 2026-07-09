@@ -3,7 +3,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { getDb } from '../db';
 import * as schema from '../db/schema';
 import { shows, seasons, episodes, movies, libraryShows, libraryMovies, watches, ratings } from '../db/schema';
-import { getShowFull, getMovie } from './tmdb';
+import { getShowFull, getMovie, getWatchProviders } from './tmdb';
 import type { TmdbShowFull, TmdbMovie } from './tmdb';
 
 export type LibStatus = 'watching' | 'finished' | 'stopped' | 'for_later';
@@ -90,13 +90,44 @@ function upsertMovieCore(db: Db, movie: TmdbMovie): void {
   db.insert(movies).values(values).onConflictDoUpdate({ target: movies.tmdbId, set: values }).run();
 }
 
+// --- watch providers ----------------------------------------------------
+
+// Returns the ProvidersJson string to store, `null` when the region legitimately
+// has no availability, or `undefined` when the fetch failed (caller leaves the
+// column untouched). A providers fetch must never fail the surrounding operation.
+async function fetchProvidersJson(kind: 'tv' | 'movie', tmdbId: number): Promise<string | null | undefined> {
+  try {
+    const providers = await getWatchProviders(kind, tmdbId);
+    return providers ? JSON.stringify(providers) : null;
+  } catch (err) {
+    console.warn(`watch providers fetch failed for ${kind} ${tmdbId}:`, err);
+    return undefined;
+  }
+}
+
+/** Re-fetches and stores watch providers for a library title. Returns true when
+ * real availability was stored. Failure-tolerant: on a fetch error the existing
+ * value is preserved and false is returned. */
+export async function refreshProviders(kind: 'tv' | 'movie', tmdbId: number): Promise<boolean> {
+  const json = await fetchProvidersJson(kind, tmdbId);
+  if (json === undefined) return false;
+  const db = getDb();
+  if (kind === 'tv') db.update(shows).set({ watchProviders: json }).where(eq(shows.tmdbId, tmdbId)).run();
+  else db.update(movies).set({ watchProviders: json }).where(eq(movies.tmdbId, tmdbId)).run();
+  return json !== null;
+}
+
 // --- shows library ------------------------------------------------------
 
 export async function addShow(tmdbId: number, status: LibStatus = 'watching'): Promise<void> {
   const show = await getShowFull(tmdbId);
+  const providers = await fetchProvidersJson('tv', tmdbId);
   const db = getDb();
   db.transaction((tx: Db) => {
     upsertShowCore(tx, show);
+    if (providers !== undefined) {
+      tx.update(shows).set({ watchProviders: providers }).where(eq(shows.tmdbId, tmdbId)).run();
+    }
     tx.insert(libraryShows)
       .values({ showId: tmdbId, status, addedAt: nowUtc() })
       .onConflictDoNothing({ target: libraryShows.showId })
@@ -193,10 +224,14 @@ function checkInMovieCore(db: Db, tmdbId: number, watchedAt?: string): void {
 
 export async function addMovie(tmdbId: number, state: 'watchlist' | 'watched', watchedAt?: string): Promise<void> {
   const movie = await getMovie(tmdbId);
+  const providers = await fetchProvidersJson('movie', tmdbId);
   const db = getDb();
   let hadExistingWatch = false;
   db.transaction((tx: Db) => {
     upsertMovieCore(tx, movie);
+    if (providers !== undefined) {
+      tx.update(movies).set({ watchProviders: providers }).where(eq(movies.tmdbId, tmdbId)).run();
+    }
     tx.insert(libraryMovies).values({ movieId: tmdbId, state, addedAt: nowUtc() }).onConflictDoNothing({ target: libraryMovies.movieId }).run();
     hadExistingWatch = tx.select().from(watches).where(and(eq(watches.kind, 'movie'), eq(watches.movieId, tmdbId))).all().length > 0;
     if (state === 'watched' && !hadExistingWatch) checkInMovieCore(tx, tmdbId, watchedAt);

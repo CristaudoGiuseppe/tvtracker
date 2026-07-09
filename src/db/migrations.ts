@@ -87,3 +87,11 @@ export const statements: string[] = [
 	\`value\` text NOT NULL
 )`,
 ];
+
+// Additive ALTER TABLE statements (drizzle/0001+). SQLite has no
+// `ADD COLUMN IF NOT EXISTS`, so these are executed with a duplicate-column
+// guard in db/index.ts — they must stay idempotent when re-run on an existing db.
+export const alterStatements: string[] = [
+  `ALTER TABLE \`movies\` ADD \`watch_providers\` text`,
+  `ALTER TABLE \`shows\` ADD \`watch_providers\` text`,
+];

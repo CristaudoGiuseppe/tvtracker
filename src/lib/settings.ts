@@ -11,6 +11,19 @@ export type TmdbLanguage = 'it-IT' | 'en-US';
 const LANGUAGE_KEY = 'tmdb.language';
 const DEFAULT_LANGUAGE: TmdbLanguage = 'it-IT';
 
+const WATCH_REGION_KEY = 'watch.region';
+const DEFAULT_WATCH_REGION = 'IT';
+
+/** ISO-3166-1 region used to pick the watch-providers block from TMDB. */
+export function getWatchRegion(): string {
+  try {
+    const row = getDb().select().from(settings).where(eq(settings.key, WATCH_REGION_KEY)).get();
+    return row?.value ?? DEFAULT_WATCH_REGION;
+  } catch {
+    return DEFAULT_WATCH_REGION;
+  }
+}
+
 export function getLanguage(): TmdbLanguage {
   try {
     const row = getDb().select().from(settings).where(eq(settings.key, LANGUAGE_KEY)).get();

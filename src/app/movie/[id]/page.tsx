@@ -5,6 +5,7 @@ import { getMovie, TmdbError } from "@/lib/tmdb";
 import { Poster } from "@/components/ui";
 import { ArrowLeftIcon } from "@/components/icons";
 import { MovieDetailControls } from "@/components/movie-detail-controls";
+import { ProvidersRow } from "@/components/providers-row";
 import { formatRuntime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +37,7 @@ type ViewModel = {
   rating: number | null;
   watchedAt: string | null;
   watchCount: number;
+  watchProviders: string | null;
 };
 
 async function loadViewModel(movieId: number): Promise<ViewModel | null> {
@@ -56,6 +58,7 @@ async function loadViewModel(movieId: number): Promise<ViewModel | null> {
       rating: detail.rating,
       watchedAt: detail.watchedAt,
       watchCount: detail.watchCount,
+      watchProviders: m.watchProviders,
     };
   }
 
@@ -81,6 +84,7 @@ async function loadViewModel(movieId: number): Promise<ViewModel | null> {
     rating: null,
     watchedAt: null,
     watchCount: 0,
+    watchProviders: null,
   };
 }
 
@@ -168,6 +172,11 @@ export default async function MovieDetailPage({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* --------------------------- Dove guardarla -------------------------- */}
+      <div className="px-5 pb-8 sm:px-8 md:px-10">
+        <ProvidersRow json={vm.watchProviders} />
       </div>
     </div>
   );

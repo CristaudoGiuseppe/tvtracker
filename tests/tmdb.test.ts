@@ -9,6 +9,7 @@ import {
   searchMovies,
   trendingShows,
   trendingMovies,
+  getWatchProviders,
   TmdbError,
   resetTmdbForTests,
 } from '../src/lib/tmdb';
@@ -293,6 +294,49 @@ describe('tmdb client', () => {
     const urls = fetchMock.mock.calls.map((c: unknown[]) => String(c[0]));
     expect(urls[0]).toContain('/trending/tv/week');
     expect(urls[1]).toContain('/trending/movie/week');
+  });
+
+  it('getWatchProviders maps the region block (default IT) to ProvidersJson', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockResponse({
+        id: 100088,
+        results: {
+          IT: {
+            link: 'https://www.themoviedb.org/tv/100088/watch?locale=IT',
+            flatrate: [{ provider_id: 8, provider_name: 'Netflix', logo_path: '/net.jpg', display_priority: 0 }],
+            rent: [{ provider_id: 2, provider_name: 'Apple TV', logo_path: '/apple.jpg', display_priority: 1 }],
+            buy: [{ provider_id: 3, provider_name: 'Google Play', logo_path: '/gp.jpg', display_priority: 2 }],
+          },
+          US: { flatrate: [{ provider_id: 15, provider_name: 'Hulu', logo_path: '/hulu.jpg' }] },
+        },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const providers = await getWatchProviders('tv', 100088);
+
+    expect(providers).toEqual({
+      region: 'IT',
+      link: 'https://www.themoviedb.org/tv/100088/watch?locale=IT',
+      flatrate: [{ id: 8, name: 'Netflix', logoPath: '/net.jpg' }],
+      rent: [{ id: 2, name: 'Apple TV', logoPath: '/apple.jpg' }],
+      buy: [{ id: 3, name: 'Google Play', logoPath: '/gp.jpg' }],
+    });
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/tv/100088/watch/providers');
+  });
+
+  it('getWatchProviders returns null when the region has no availability block', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockResponse({ id: 100099, results: { US: { flatrate: [] } } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const providers = await getWatchProviders('movie', 100099);
+
+    expect(providers).toBeNull();
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/movie/100099/watch/providers');
   });
 
   it('(g) throttles the 41st request until the 10s sliding window elapses', async () => {

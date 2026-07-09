@@ -1,4 +1,4 @@
-import { getLanguage } from './settings';
+import { getLanguage, getWatchRegion } from './settings';
 
 const BASE_URL = 'https://api.themoviedb.org/3';
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -57,6 +57,20 @@ export interface TmdbMovie {
   genres: { name: string }[];
   runtime: number | null;
   release_date: string | null;
+}
+
+export interface ProviderEntry {
+  id: number;
+  name: string;
+  logoPath: string;
+}
+
+export interface ProvidersJson {
+  region: string;
+  link?: string;
+  flatrate: ProviderEntry[];
+  rent: ProviderEntry[];
+  buy: ProviderEntry[];
 }
 
 export interface TmdbSearchResult {
@@ -222,6 +236,29 @@ export async function getMovie(tmdbId: number): Promise<TmdbMovie> {
     genres: raw.genres ?? [],
     runtime: raw.runtime ?? null,
     release_date: raw.release_date ?? null,
+  };
+}
+
+function mapProviderList(raw: any[] | undefined): ProviderEntry[] {
+  return (raw ?? []).map(p => ({ id: p.provider_id, name: p.provider_name, logoPath: p.logo_path }));
+}
+
+/** Streaming availability (JustWatch data) for the region in settings `watch.region`
+ * (default 'IT'). Returns null when TMDB has no provider block for that region. */
+export async function getWatchProviders(
+  kind: 'tv' | 'movie',
+  tmdbId: number,
+): Promise<ProvidersJson | null> {
+  const region = getWatchRegion();
+  const data = await tmdbGet(`/${kind}/${tmdbId}/watch/providers`);
+  const regionData = data.results?.[region];
+  if (!regionData) return null;
+  return {
+    region,
+    link: regionData.link,
+    flatrate: mapProviderList(regionData.flatrate),
+    rent: mapProviderList(regionData.rent),
+    buy: mapProviderList(regionData.buy),
   };
 }
 

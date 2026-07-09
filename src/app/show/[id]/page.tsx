@@ -11,6 +11,7 @@ import { ProgressBar, StatusBadge, Poster, type LibraryStatus } from "@/componen
 import { ArrowLeftIcon } from "@/components/icons";
 import { ShowDetailControls } from "@/components/show-detail-header";
 import { SeasonTabs, type SeasonVM } from "@/components/season-tabs";
+import { ProvidersRow } from "@/components/providers-row";
 import type { StoredStatus } from "@/components/status-menu";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +68,7 @@ type ViewModel = {
   airedCount: number;
   watchedCount: number;
   upToDate: boolean;
+  watchProviders: string | null;
 };
 
 async function loadViewModel(showId: number): Promise<ViewModel | null> {
@@ -88,6 +90,7 @@ async function loadViewModel(showId: number): Promise<ViewModel | null> {
       airedCount: detail.progress.airedCount,
       watchedCount: detail.progress.watchedCount,
       upToDate: detail.progress.upToDate,
+      watchProviders: detail.show.watchProviders,
     };
   }
 
@@ -133,6 +136,7 @@ async function loadViewModel(showId: number): Promise<ViewModel | null> {
     airedCount: 0,
     watchedCount: 0,
     upToDate: false,
+    watchProviders: null,
   };
 }
 
@@ -247,7 +251,8 @@ export default async function ShowDetailPage({
       </div>
 
       {/* ----------------------------- Episodes ----------------------------- */}
-      <div className="px-5 py-8 sm:px-8 md:px-10">
+      <div className="space-y-8 px-5 py-8 sm:px-8 md:px-10">
+        <ProvidersRow json={vm.watchProviders} />
         <SeasonTabs showId={vm.showId} seasons={vm.seasons} inLibrary={vm.inLibrary} />
       </div>
     </div>
